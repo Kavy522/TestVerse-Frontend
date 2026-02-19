@@ -1,572 +1,438 @@
 /**
  * TestVerse — Staff Exams Page
- * Full CRUD + publish/unpublish based on API spec
+ * Features: list, filter, search, paginate, stat pill quick-filter,
+ *           edit modal, publish/unpublish modal, delete modal,
+ *           live countdown on active exams, start-countdown on published.
  */
-
 'use strict';
 
-// ── State ─────────────────────────────────────────────────────────────────
-let _page        = 1;
-let _totalPages  = 1;
-let _totalCount  = 0;
-let _allExams    = [];   // current page exams
-let _search      = '';
-let _statusFilter = '';
-let _typeFilter  = '';
-let _sort        = '-created_at';
-let _editExamId  = null;
-let _deleteExamId = null;
-let _publishExamId = null;
-let _publishAction = 'publish'; // 'publish' | 'unpublish'
+// ── State ──────────────────────────────────────────────────────────
+let _page = 1, _totalPages = 1, _totalCount = 0, _allExams = [];
+let _search = '', _statusFilter = '', _typeFilter = '', _sort = '-created_at';
+let _editId = null, _deleteId = null, _publishId = null, _publishAct = 'publish';
+let _searchTimer = null, _countdownIntervals = [];
 
-// ── Boot ──────────────────────────────────────────────────────────────────
+// ── Boot ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     if (!Auth.requireStaff()) return;
-    _initSidebar();
-    _initFilters();
-    _initEditModal();
-    _initDeleteModal();
-    _initPublishModal();
+    _initUser(); _initSidebar(); _initFilters();
+    _initStatPills(); _initEditModal(); _initDeleteModal(); _initPublishModal();
     _loadExams();
 });
 
-// ── Sidebar ───────────────────────────────────────────────────────────────
+// ── User ───────────────────────────────────────────────────────────
+function _initUser() {
+    const user = Auth.getUser(); if (!user) return;
+    const name = user.name || user.username || user.email?.split('@')[0] || 'Staff';
+    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`;
+    ['sidebarUserName','topbarUserName'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = name; });
+    ['sidebarAvatar','topbarAvatar'].forEach(id => { const el = document.getElementById(id); if (el) el.src = avatar; });
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────
 function _initSidebar() {
-    document.getElementById('mobileSidebarToggle')?.addEventListener('click', () => {
-        document.getElementById('sidebar')?.classList.toggle('open');
-    });
-
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const open  = () => { sidebar.classList.add('open'); overlay.classList.add('show'); };
+    const close = () => { sidebar.classList.remove('open'); overlay.classList.remove('show'); };
+    document.getElementById('menuToggle')?.addEventListener('click', open);
+    document.getElementById('sidebarClose')?.addEventListener('click', close);
+    overlay?.addEventListener('click', close);
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
-        if (confirm('Are you sure you want to logout?')) Auth.logout();
+        if (confirm('Logout from TestVerse?')) Auth.logout();
     });
-
-    const user = Auth.getUser();
-    if (user) {
-        const name = user.name || user.username || user.email?.split('@')[0] || 'Staff';
-        const el = document.getElementById('userName');
-        const av = document.getElementById('userAvatar');
-        if (el) el.textContent = name;
-        if (av) av.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`;
-    }
+    document.getElementById('refreshBtn')?.addEventListener('click', () => { _page = 1; _loadExams(); });
 }
 
-// ── Filters ───────────────────────────────────────────────────────────────
+// ── Stat Pills ─────────────────────────────────────────────────────
+function _initStatPills() {
+    document.querySelectorAll('.tv-stat-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            const f = pill.dataset.filter;
+            _statusFilter = (_statusFilter === f && f !== '') ? '' : f;
+            _page = 1; _syncPillUI(); _loadExams();
+        });
+    });
+}
+function _syncPillUI() {
+    document.querySelectorAll('.tv-stat-pill').forEach(p =>
+        p.classList.toggle('active-filter', p.dataset.filter === _statusFilter));
+    const clearBtn = document.getElementById('clearFiltersBtn');
+    if (clearBtn) clearBtn.style.display = (_search || _statusFilter || _typeFilter) ? 'flex' : 'none';
+}
+
+// ── Filters ────────────────────────────────────────────────────────
 function _initFilters() {
-    let _searchTimer;
-
-    document.getElementById('searchInput')?.addEventListener('input', e => {
+    const searchEl = document.getElementById('searchInput');
+    const clearEl  = document.getElementById('searchClear');
+    searchEl?.addEventListener('input', e => {
+        clearEl?.classList.toggle('hidden', !e.target.value);
         clearTimeout(_searchTimer);
-        _searchTimer = setTimeout(() => {
-            _search = e.target.value.trim();
-            _page = 1;
-            _loadExams();
-        }, 450);
+        _searchTimer = setTimeout(() => { _search = e.target.value.trim(); _page = 1; _syncPillUI(); _loadExams(); }, 420);
     });
-
-    document.getElementById('statusFilter')?.addEventListener('change', e => {
-        _statusFilter = e.target.value;
-        _page = 1;
-        _loadExams();
+    clearEl?.addEventListener('click', () => {
+        searchEl.value = ''; clearEl.classList.add('hidden');
+        _search = ''; _page = 1; _syncPillUI(); _loadExams();
     });
-
-    document.getElementById('examTypeFilter')?.addEventListener('change', e => {
-        _typeFilter = e.target.value;
-        _page = 1;
-        _loadExams();
-    });
-
-    document.getElementById('sortFilter')?.addEventListener('change', e => {
-        _sort = e.target.value;
-        _page = 1;
-        _loadExams();
-    });
-
-    document.getElementById('prevBtn')?.addEventListener('click', () => {
-        if (_page > 1) { _page--; _loadExams(); }
-    });
-
-    document.getElementById('nextBtn')?.addEventListener('click', () => {
-        if (_page < _totalPages) { _page++; _loadExams(); }
-    });
+    document.getElementById('typeFilter')?.addEventListener('change', e => { _typeFilter = e.target.value; _page = 1; _syncPillUI(); _loadExams(); });
+    document.getElementById('sortFilter')?.addEventListener('change', e => { _sort = e.target.value; _page = 1; _loadExams(); });
+    document.getElementById('prevBtn')?.addEventListener('click', () => { if (_page > 1) { _page--; _loadExams(); } });
+    document.getElementById('nextBtn')?.addEventListener('click', () => { if (_page < _totalPages) { _page++; _loadExams(); } });
+    document.getElementById('clearFiltersBtn')?.addEventListener('click', _clearAllFilters);
+}
+function _clearAllFilters() {
+    _search = ''; _statusFilter = ''; _typeFilter = ''; _page = 1;
+    const s = document.getElementById('searchInput'); if (s) s.value = '';
+    document.getElementById('searchClear')?.classList.add('hidden');
+    const t = document.getElementById('typeFilter'); if (t) t.value = '';
+    _syncPillUI(); _loadExams();
 }
 
-// ── Load Exams from API ───────────────────────────────────────────────────
+// ── Load Exams ─────────────────────────────────────────────────────
 async function _loadExams() {
-    _showLoading();
-
+    _clearCountdowns(); _showLoading();
+    const refreshBtn = document.getElementById('refreshBtn');
+    refreshBtn?.classList.add('spinning');
     try {
         const params = new URLSearchParams({ page: _page, page_size: 12 });
-        if (_search)       params.set('search',    _search);
-        if (_statusFilter) params.set('status',    _statusFilter);
+        if (_search)       params.set('search', _search);
+        if (_statusFilter) params.set('status', _statusFilter);
         if (_typeFilter)   params.set('exam_type', _typeFilter);
-        if (_sort)         params.set('ordering',  _sort);
+        if (_sort)         params.set('ordering', _sort);
 
         const res = await Api.get(`${CONFIG.ENDPOINTS.STAFF_EXAMS}?${params}`);
         const { data, error } = await Api.parse(res);
 
-        if (error) {
-            UI.showAlert('alertContainer', 'Failed to load exams. Please try again.', 'error');
-            _showEmpty('Error loading exams', 'Please try again or contact support.', false);
-            return;
-        }
+        if (error) { UI.toast('Failed to load exams.', 'error'); _showEmpty('Error', 'Please refresh.', false); return; }
 
         let exams = [];
-        if (data && data.results) {
-            exams = data.results;
-            _totalCount = data.count || 0;
-            _totalPages = Math.ceil(_totalCount / 12) || 1;
-        } else if (Array.isArray(data)) {
-            exams = data;
-            _totalCount = exams.length;
-            _totalPages = 1;
-        }
+        if (data?.results) { exams = data.results; _totalCount = data.count || 0; _totalPages = Math.ceil(_totalCount / 12) || 1; }
+        else if (Array.isArray(data)) { exams = data; _totalCount = exams.length; _totalPages = 1; }
 
         _allExams = exams;
-        _updateSummaryStats(exams);
+        _updateStats(exams);
+        _updateResultsInfo();
 
-        if (exams.length === 0) {
-            _showEmpty(
-                (_search || _statusFilter || _typeFilter) ? 'No exams found' : 'No Exams Yet',
-                (_search || _statusFilter || _typeFilter) ? 'Try adjusting your filters or search.' : 'Create your first exam to get started.',
-                !(_search || _statusFilter || _typeFilter)
-            );
+        if (!exams.length) {
+            const hf = _search || _statusFilter || _typeFilter;
+            _showEmpty(hf ? 'No Exams Found' : 'No Exams Yet', hf ? 'Try adjusting your filters.' : 'Create your first exam.', !hf);
         } else {
             _renderExams(exams);
-            _updatePagination();
         }
-
     } catch (err) {
-        console.error('Load exams error:', err);
-        UI.showAlert('alertContainer', 'Network error. Check your connection.', 'error');
-        _showEmpty('Network error', 'Check your connection and try again.', false);
+        console.error(err); UI.toast('Network error.', 'error');
+        _showEmpty('Network Error', 'Check your connection.', false);
+    } finally {
+        refreshBtn?.classList.remove('spinning');
     }
 }
 
-// ── Update Summary Stats ──────────────────────────────────────────────────
-function _updateSummaryStats(exams) {
+// ── Stats ──────────────────────────────────────────────────────────
+function _updateStats(exams) {
     const now = new Date();
-    let draft = 0, published = 0, active = 0, completed = 0;
-
-    exams.forEach(e => {
-        const status = _getExamStatus(e, now);
-        if (status === 'draft')     draft++;
-        else if (status === 'published') published++;
-        else if (status === 'active')    active++;
-        else if (status === 'completed') completed++;
-    });
-
-    document.getElementById('statTotal').textContent     = exams.length;
-    document.getElementById('statDraft').textContent     = draft;
-    document.getElementById('statPublished').textContent = published;
-    document.getElementById('statActive').textContent    = active;
-    document.getElementById('statCompleted').textContent = completed;
+    const c = { all: _totalCount || exams.length, draft: 0, published: 0, active: 0, completed: 0 };
+    exams.forEach(e => { const s = _getStatus(e, now); if (c[s] !== undefined) c[s]++; });
+    document.getElementById('statAll').textContent       = c.all;
+    document.getElementById('statDraft').textContent     = c.draft;
+    document.getElementById('statPublished').textContent = c.published;
+    document.getElementById('statActive').textContent    = c.active;
+    document.getElementById('statCompleted').textContent = c.completed;
+}
+function _updateResultsInfo() {
+    const el = document.getElementById('resultsInfo'), txt = document.getElementById('resultsText');
+    if (!el || !txt) return;
+    txt.textContent = `Showing ${_allExams.length} of ${_totalCount} ${_totalCount === 1 ? 'exam' : 'exams'}`;
+    el.style.display = 'flex';
+    const cb = document.getElementById('clearFiltersBtn');
+    if (cb) cb.style.display = (_search || _statusFilter || _typeFilter) ? 'flex' : 'none';
 }
 
-// ── Derive Status ─────────────────────────────────────────────────────────
-function _getExamStatus(exam, now = new Date()) {
+// ── Status ─────────────────────────────────────────────────────────
+function _getStatus(exam, now = new Date()) {
     if (!exam.is_published) return 'draft';
-    const start = new Date(exam.start_time);
-    const end   = new Date(exam.end_time);
-    if (now < start)  return 'published';
-    if (now <= end)   return 'active';
+    const start = new Date(exam.start_time), end = new Date(exam.end_time);
+    if (now < start) return 'published';
+    if (now <= end)  return 'active';
     return 'completed';
 }
+const _statusLabel = { draft: 'Draft', published: 'Published', active: 'Live', completed: 'Completed' };
 
-// ── Render Exams ──────────────────────────────────────────────────────────
+// ── Render ─────────────────────────────────────────────────────────
 function _renderExams(exams) {
-    const grid = document.getElementById('examsGrid');
-    if (!grid) return;
-
-    grid.innerHTML = exams.map(exam => _buildCard(exam)).join('');
+    const grid = document.getElementById('examsGrid'); if (!grid) return;
+    grid.innerHTML = exams.map(_buildCard).join('');
     grid.style.display = 'grid';
-
     document.getElementById('loadingState').style.display = 'none';
-    document.getElementById('emptyState').style.display   = 'none';
-    document.getElementById('pagination').style.display   = 'flex';
+    document.getElementById('emptyState').style.display = 'none';
+    _updatePagination();
+    const now = new Date();
+    exams.forEach(e => {
+        const s = _getStatus(e, now);
+        if (s === 'active')    _startCountdownEnd(e);
+        if (s === 'published') _startCountdownStart(e);
+    });
 }
 
 function _buildCard(exam) {
-    const now    = new Date();
-    const status = _getExamStatus(exam, now);
+    const now = new Date(), status = _getStatus(exam, now), label = _statusLabel[status] || status;
+    const fmt = iso => iso ? new Date(iso).toLocaleString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    }) : 'Not set';
+    const typeLabel = (exam.exam_type || 'general').charAt(0).toUpperCase() + (exam.exam_type || 'general').slice(1);
 
-    const statusLabels = {
-        draft:     { text: 'Draft',     icon: 'fa-pencil-alt' },
-        published: { text: 'Published', icon: 'fa-check-circle' },
-        active:    { text: 'Live',      icon: 'fa-play-circle' },
-        completed: { text: 'Completed', icon: 'fa-flag-checkered' }
-    };
+    const pubBtn = exam.is_published
+        ? `<button class="action-btn unpublish" onclick="window._openPublish('${exam.id}','unpublish','${_esc(exam.title)}')"><i class="fas fa-eye-slash"></i> Unpublish</button>`
+        : `<button class="action-btn publish"   onclick="window._openPublish('${exam.id}','publish','${_esc(exam.title)}')"><i class="fas fa-check-circle"></i> Publish</button>`;
 
-    const { text: statusText, icon: statusIcon } = statusLabels[status] || statusLabels.draft;
-
-    const startDate = exam.start_time
-        ? new Date(exam.start_time).toLocaleString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
-        : 'Not scheduled';
-
-    const endDate = exam.end_time
-        ? new Date(exam.end_time).toLocaleString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
-        : '—';
-
-    const qCount = exam.question_count || 0;
-    const examType = (exam.exam_type || 'general').charAt(0).toUpperCase() + (exam.exam_type || 'general').slice(1);
-
-    // Publish / Unpublish button
-    const publishBtn = exam.is_published
-        ? `<button class="exam-action-btn unpublish" onclick="window.openPublishModal('${exam.id}','unpublish','${UI.escapeHtml(exam.title)}')">
-               <i class="fas fa-eye-slash"></i> Unpublish
-           </button>`
-        : `<button class="exam-action-btn publish" onclick="window.openPublishModal('${exam.id}','publish','${UI.escapeHtml(exam.title)}')">
-               <i class="fas fa-check-circle"></i> Publish
-           </button>`;
-
-    // Live monitor only when active
     const liveBtn = status === 'active'
-        ? `<a href="live-monitor.html?id=${exam.id}" class="exam-action-btn" style="background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.2);">
-               <i class="fas fa-broadcast-tower"></i> Live
-           </a>`
+        ? `<a href="live-monitor.html?id=${exam.id}" class="action-btn live"><i class="fas fa-satellite-dish"></i> Live</a>`
         : '';
 
+    let cdHtml = '';
+    if (status === 'active')
+        cdHtml = `<div class="countdown live" id="cd-${exam.id}"><i class="fas fa-spinner"></i><span id="cd-txt-${exam.id}">…</span></div>`;
+    if (status === 'published')
+        cdHtml = `<div class="countdown starts" id="cd-${exam.id}"><i class="fas fa-clock"></i><span id="cd-txt-${exam.id}">Starts in…</span></div>`;
+
     return `
-        <div class="exam-card status-${status}" data-id="${exam.id}">
-            <div class="exam-card-top">
-                <h3 class="exam-card-title">${UI.escapeHtml(exam.title)}</h3>
-                <span class="exam-status-badge ${status}">
-                    <span class="status-dot"></span>
-                    ${statusText}
-                </span>
+    <div class="exam-card s-${status}" data-id="${exam.id}">
+        <div class="card-top">
+            <h3 class="exam-title">${_esc(exam.title)}</h3>
+            <span class="status-badge s-${status}"><span class="status-dot"></span>${label}</span>
+        </div>
+        <div class="card-body">
+            <span class="type-chip">${typeLabel}</span>
+            ${exam.description ? `<p class="exam-desc">${_esc(exam.description)}</p>` : ''}
+            ${cdHtml}
+            <div class="card-meta">
+                <div class="meta-item"><i class="fas fa-question-circle"></i><span><strong>${exam.question_count ?? '—'}</strong> Questions</span></div>
+                <div class="meta-item"><i class="fas fa-clock"></i><span><strong>${exam.duration || 0}</strong> min</span></div>
+                <div class="meta-item"><i class="fas fa-trophy"></i><span>Total: <strong>${exam.total_marks || 0}</strong></span></div>
+                <div class="meta-item"><i class="fas fa-crosshairs"></i><span>Pass: <strong>${exam.passing_marks || 0}</strong></span></div>
+                <div class="meta-item"><i class="fas fa-users"></i><span>Attempts: <strong>${exam.total_attempts || 0}</strong></span></div>
+                <div class="meta-item"><i class="fas fa-percentage"></i><span>Pass%: <strong>${exam.pass_percentage || '—'}</strong></span></div>
             </div>
-            <div class="exam-card-body">
-                ${exam.description ? `<p class="exam-description">${UI.escapeHtml(exam.description)}</p>` : ''}
-                <div class="exam-meta-grid">
-                    <div class="exam-meta-item">
-                        <i class="fas fa-tag"></i>
-                        <span>${examType}</span>
-                    </div>
-                    <div class="exam-meta-item">
-                        <i class="fas fa-question-circle"></i>
-                        <span><strong>${qCount}</strong> Questions</span>
-                    </div>
-                    <div class="exam-meta-item">
-                        <i class="fas fa-clock"></i>
-                        <span><strong>${exam.duration || 0}</strong> min</span>
-                    </div>
-                    <div class="exam-meta-item">
-                        <i class="fas fa-trophy"></i>
-                        <span><strong>${exam.total_marks || 0}</strong> marks</span>
-                    </div>
-                    <div class="exam-meta-item">
-                        <i class="fas fa-crosshairs"></i>
-                        <span>Pass: <strong>${exam.passing_marks || 0}</strong></span>
-                    </div>
-                    <div class="exam-meta-item">
-                        <i class="fas fa-users"></i>
-                        <span>Attempts: <strong>${exam.total_attempts || 0}</strong></span>
-                    </div>
-                </div>
-                <div class="exam-date-row">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>${startDate} → ${endDate}</span>
-                </div>
-            </div>
-            <div class="exam-card-actions">
-                <a href="examedit.html?id=${exam.id}" class="exam-action-btn questions">
-                    <i class="fas fa-list-ol"></i> Questions
-                </a>
-                <button class="exam-action-btn edit" onclick="window.openEditModal('${exam.id}')">
-                    <i class="fas fa-edit"></i> Edit
-                </button>
-                ${publishBtn}
-                ${liveBtn}
-                <button class="exam-action-btn delete" onclick="window.openDeleteModal('${exam.id}','${UI.escapeHtml(exam.title)}')">
-                    <i class="fas fa-trash"></i>
-                </button>
+            <div class="timeline">
+                <div class="timeline-row"><i class="fas fa-play"></i><span class="timeline-label">Starts</span><span class="timeline-val">${fmt(exam.start_time)}</span></div>
+                <div class="timeline-row"><i class="fas fa-stop"></i><span class="timeline-label">Ends</span><span class="timeline-val">${fmt(exam.end_time)}</span></div>
             </div>
         </div>
-    `;
+        <div class="card-actions">
+            <a href="examedit.html?id=${exam.id}" class="action-btn questions"><i class="fas fa-list-ol"></i> Questions</a>
+            <button class="action-btn edit" onclick="window._openEdit('${exam.id}')"><i class="fas fa-edit"></i> Edit</button>
+            ${pubBtn}${liveBtn}
+            <button class="action-btn del" onclick="window._openDelete('${exam.id}','${_esc(exam.title)}')"><i class="fas fa-trash"></i></button>
+        </div>
+    </div>`;
 }
 
-// ── Show States ───────────────────────────────────────────────────────────
+
+// ── Countdowns ─────────────────────────────────────────────────────
+function _startCountdownEnd(exam) {
+    const end = new Date(exam.end_time).getTime();
+    const id = setInterval(() => {
+        const diff = end - Date.now();
+        const el = document.getElementById(`cd-txt-${exam.id}`);
+        if (!el) return clearInterval(id);
+        diff <= 0 ? (el.textContent = 'Ended', clearInterval(id)) : (el.textContent = `${_fmtMs(diff)} remaining`);
+    }, 1000);
+    _countdownIntervals.push(id);
+}
+function _startCountdownStart(exam) {
+    const start = new Date(exam.start_time).getTime();
+    const id = setInterval(() => {
+        const diff = start - Date.now();
+        const el = document.getElementById(`cd-txt-${exam.id}`);
+        if (!el) return clearInterval(id);
+        diff <= 0 ? (el.textContent = 'Starting…', clearInterval(id)) : (el.textContent = `Starts in ${_fmtMs(diff)}`);
+    }, 1000);
+    _countdownIntervals.push(id);
+}
+function _clearCountdowns() { _countdownIntervals.forEach(clearInterval); _countdownIntervals = []; }
+function _fmtMs(ms) {
+    const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+    return h > 0 ? `${h}h ${String(m).padStart(2,'0')}m` : `${String(m).padStart(2,'0')}m ${String(sec).padStart(2,'0')}s`;
+}
+
+// ── UI States ──────────────────────────────────────────────────────
 function _showLoading() {
     document.getElementById('loadingState').style.display = 'flex';
-    document.getElementById('examsGrid').style.display    = 'none';
-    document.getElementById('emptyState').style.display   = 'none';
-    document.getElementById('pagination').style.display   = 'none';
+    document.getElementById('examsGrid').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('pagination').style.display = 'none';
+    document.getElementById('resultsInfo').style.display = 'none';
 }
-
-function _showEmpty(title, subtitle, showCreateBtn = true) {
+function _showEmpty(title, sub, showBtn = true) {
     document.getElementById('loadingState').style.display = 'none';
-    document.getElementById('examsGrid').style.display    = 'none';
-    document.getElementById('pagination').style.display   = 'none';
-
-    document.getElementById('emptyTitle').textContent    = title;
-    document.getElementById('emptySubtitle').textContent = subtitle;
-
+    document.getElementById('examsGrid').style.display = 'none';
+    document.getElementById('pagination').style.display = 'none';
+    document.getElementById('emptyTitle').textContent = title;
+    document.getElementById('emptySubtitle').textContent = sub;
     const btn = document.getElementById('emptyAction');
-    if (btn) btn.style.display = showCreateBtn ? 'inline-flex' : 'none';
-
+    if (btn) btn.style.display = showBtn ? 'inline-flex' : 'none';
     document.getElementById('emptyState').style.display = 'flex';
 }
-
 function _updatePagination() {
-    document.getElementById('paginationInfo').textContent = `Page ${_page} of ${_totalPages}`;
+    const p = document.getElementById('pagination');
+    if (_totalPages <= 1) { p.style.display = 'none'; return; }
+    p.style.display = 'flex';
+    document.getElementById('pageInfo').textContent = `Page ${_page} of ${_totalPages}`;
     document.getElementById('prevBtn').disabled = _page <= 1;
     document.getElementById('nextBtn').disabled = _page >= _totalPages;
-    document.getElementById('pagination').style.display = _totalPages > 1 ? 'flex' : 'none';
 }
 
-// ── Edit Exam Modal ───────────────────────────────────────────────────────
+// ── Edit Modal ─────────────────────────────────────────────────────
 function _initEditModal() {
-    document.getElementById('editModalClose')?.addEventListener('click', _closeEditModal);
-    document.getElementById('cancelEditBtn')?.addEventListener('click', _closeEditModal);
-    document.getElementById('editExamModal')?.addEventListener('click', e => {
-        if (e.target.id === 'editExamModal') _closeEditModal();
-    });
-
-    // Auto-calculate duration
-    ['editStartTime','editEndTime'].forEach(id => {
-        document.getElementById(id)?.addEventListener('change', _calcEditDuration);
-    });
-
-    document.getElementById('saveEditBtn')?.addEventListener('click', _saveEdit);
+    document.getElementById('editModalClose')?.addEventListener('click', _closeEdit);
+    document.getElementById('editCancelBtn')?.addEventListener('click', _closeEdit);
+    document.getElementById('editModal')?.addEventListener('click', e => { if (e.target.id === 'editModal') _closeEdit(); });
+    ['editStart','editEnd'].forEach(id => document.getElementById(id)?.addEventListener('change', _calcDuration));
+    document.getElementById('editSaveBtn')?.addEventListener('click', _saveEdit);
 }
+function _closeEdit() { document.getElementById('editModal').classList.remove('show'); _editId = null; UI.clearAlert('editAlertContainer'); }
 
-function _closeEditModal() {
-    document.getElementById('editExamModal').classList.remove('show');
-    _editExamId = null;
-}
-
-window.openEditModal = (examId) => {
-    const exam = _allExams.find(e => e.id === examId);
-    if (!exam) return;
-
-    _editExamId = examId;
-
-    // Populate form
+window._openEdit = (id) => {
+    const exam = _allExams.find(e => e.id === id); if (!exam) return;
+    _editId = id;
     document.getElementById('editTitle').value        = exam.title || '';
     document.getElementById('editDescription').value  = exam.description || '';
-    document.getElementById('editExamType').value     = exam.exam_type || 'midterm';
+    document.getElementById('editType').value         = exam.exam_type || 'midterm';
     document.getElementById('editTotalMarks').value   = exam.total_marks || '';
-    document.getElementById('editPassingMarks').value = exam.passing_marks || '';
+    document.getElementById('editPassMarks').value    = exam.passing_marks || '';
     document.getElementById('editInstructions').value = exam.instructions || '';
-
-    // Format datetimes
-    if (exam.start_time) document.getElementById('editStartTime').value = _toDatetimeLocal(exam.start_time);
-    if (exam.end_time)   document.getElementById('editEndTime').value   = _toDatetimeLocal(exam.end_time);
-
-    _calcEditDuration();
-    document.getElementById('editExamModal').classList.add('show');
+    if (exam.start_time) document.getElementById('editStart').value = _toLocal(exam.start_time);
+    if (exam.end_time)   document.getElementById('editEnd').value   = _toLocal(exam.end_time);
+    _calcDuration();
+    UI.clearAlert('editAlertContainer');
+    document.getElementById('editModal').classList.add('show');
 };
 
-function _toDatetimeLocal(iso) {
-    const d = new Date(iso);
-    const pad = n => String(n).padStart(2,'0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function _toLocal(iso) {
+    const d = new Date(iso), p = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-
-function _calcEditDuration() {
-    const s = document.getElementById('editStartTime')?.value;
-    const e = document.getElementById('editEndTime')?.value;
+function _calcDuration() {
+    const s = document.getElementById('editStart')?.value, e = document.getElementById('editEnd')?.value;
     const dur = document.getElementById('editDuration');
-
-    if (s && e) {
-        const diff = Math.floor((new Date(e) - new Date(s)) / 60000);
-        if (dur) dur.value = diff > 0 ? diff : '';
-    }
+    if (s && e && dur) { const d = Math.floor((new Date(e) - new Date(s)) / 60000); dur.value = d > 0 ? d : ''; }
 }
-
 async function _saveEdit() {
-    if (!_editExamId) return;
+    if (!_editId) return;
+    const title = document.getElementById('editTitle').value.trim();
+    const description = document.getElementById('editDescription').value.trim();
+    const exam_type = document.getElementById('editType').value;
+    const start_time = document.getElementById('editStart').value;
+    const end_time   = document.getElementById('editEnd').value;
+    const total_marks = document.getElementById('editTotalMarks').value;
+    const pass_marks  = document.getElementById('editPassMarks').value;
+    const instructions = document.getElementById('editInstructions').value.trim();
 
-    const title        = document.getElementById('editTitle')?.value.trim();
-    const description  = document.getElementById('editDescription')?.value.trim();
-    const exam_type    = document.getElementById('editExamType')?.value;
-    const start_time   = document.getElementById('editStartTime')?.value;
-    const end_time     = document.getElementById('editEndTime')?.value;
-    const total_marks  = document.getElementById('editTotalMarks')?.value;
-    const passing_marks= document.getElementById('editPassingMarks')?.value;
-    const instructions = document.getElementById('editInstructions')?.value.trim();
-
-    if (!title || !description || !start_time || !end_time || !total_marks || !passing_marks) {
-        UI.showAlert('editAlertContainer', 'Please fill in all required fields.', 'error');
-        return;
-    }
-
-    if (parseFloat(passing_marks) > parseFloat(total_marks)) {
-        UI.showAlert('editAlertContainer', 'Passing marks cannot exceed total marks.', 'error');
-        return;
-    }
-
+    if (!title || !description || !start_time || !end_time || !total_marks || !pass_marks)
+        return UI.showAlert('editAlertContainer', 'Please fill all required fields.', 'error');
+    if (+pass_marks > +total_marks)
+        return UI.showAlert('editAlertContainer', 'Passing marks cannot exceed total marks.', 'error');
     const duration = Math.floor((new Date(end_time) - new Date(start_time)) / 60000);
-    if (duration <= 0) {
-        UI.showAlert('editAlertContainer', 'End time must be after start time.', 'error');
-        return;
-    }
+    if (duration <= 0)
+        return UI.showAlert('editAlertContainer', 'End time must be after start time.', 'error');
 
-    const btn = document.getElementById('saveEditBtn');
+    const btn = document.getElementById('editSaveBtn');
     _setBtnLoading(btn, true);
-
     try {
-        const payload = {
-            title,
-            description,
-            exam_type,
+        const res = await Api.patch(CONFIG.ENDPOINTS.STAFF_EXAM_DETAIL(_editId), {
+            title, description, exam_type,
             start_time: new Date(start_time).toISOString(),
             end_time:   new Date(end_time).toISOString(),
-            duration,
-            total_marks:   String(total_marks),
-            passing_marks: String(passing_marks),
-            instructions:  instructions || ''
-        };
-
-        const res = await Api.patch(CONFIG.ENDPOINTS.STAFF_EXAM_DETAIL(_editExamId), payload);
+            duration, total_marks: String(total_marks), passing_marks: String(pass_marks), instructions,
+        });
         const { data, error } = await Api.parse(res);
-
-        if (error) {
-            UI.showAlert('editAlertContainer', Auth.extractErrorMessage(error), 'error');
-            return;
-        }
-
-        // Update local state
-        const idx = _allExams.findIndex(e => e.id === _editExamId);
+        if (error) return UI.showAlert('editAlertContainer', Auth.extractErrorMessage(error), 'error');
+        const idx = _allExams.findIndex(e => e.id === _editId);
         if (idx !== -1) _allExams[idx] = { ..._allExams[idx], ...data };
-
-        _closeEditModal();
-        UI.showAlert('alertContainer', 'Exam updated successfully!', 'success');
-        _loadExams();
-
-    } catch (err) {
-        UI.showAlert('editAlertContainer', 'Network error. Please try again.', 'error');
-    } finally {
-        _setBtnLoading(btn, false);
-    }
+        _closeEdit(); UI.toast('Exam updated!', 'success'); _loadExams();
+    } catch { UI.showAlert('editAlertContainer', 'Network error. Try again.', 'error'); }
+    finally { _setBtnLoading(btn, false); }
 }
 
-// ── Publish / Unpublish Modal ─────────────────────────────────────────────
+// ── Publish Modal ──────────────────────────────────────────────────
 function _initPublishModal() {
-    document.getElementById('publishModalClose')?.addEventListener('click', _closePublishModal);
-    document.getElementById('cancelPublishBtn')?.addEventListener('click', _closePublishModal);
-    document.getElementById('publishModal')?.addEventListener('click', e => {
-        if (e.target.id === 'publishModal') _closePublishModal();
-    });
-    document.getElementById('confirmPublishBtn')?.addEventListener('click', _confirmPublish);
+    document.getElementById('publishModalClose')?.addEventListener('click', _closePublish);
+    document.getElementById('publishCancelBtn')?.addEventListener('click', _closePublish);
+    document.getElementById('publishModal')?.addEventListener('click', e => { if (e.target.id === 'publishModal') _closePublish(); });
+    document.getElementById('publishConfirmBtn')?.addEventListener('click', _confirmPublish);
 }
+function _closePublish() { document.getElementById('publishModal').classList.remove('show'); _publishId = null; }
 
-function _closePublishModal() {
-    document.getElementById('publishModal').classList.remove('show');
-}
-
-window.openPublishModal = (examId, action, examTitle) => {
-    _publishExamId = examId;
-    _publishAction = action;
-
-    const isPublish = action === 'publish';
-    document.getElementById('publishModalTitle').innerHTML = isPublish
-        ? '<i class="fas fa-check-circle" style="color:#22c55e;"></i> Publish Exam'
-        : '<i class="fas fa-eye-slash" style="color:#fb923c;"></i> Unpublish Exam';
-
-    document.getElementById('publishModalMessage').textContent = isPublish
-        ? `"${examTitle}" will become visible to eligible students.`
-        : `"${examTitle}" will be hidden from students.`;
-
-    const confirmBtn = document.getElementById('confirmPublishText');
-    if (confirmBtn) confirmBtn.textContent = isPublish ? 'Yes, Publish' : 'Yes, Unpublish';
-
-    const btn = document.getElementById('confirmPublishBtn');
-    btn.className = `btn ${isPublish ? 'btn-primary' : 'btn-warning'}`;
-
+window._openPublish = (id, action, title) => {
+    _publishId = id; _publishAct = action;
+    const isP = action === 'publish';
+    document.getElementById('publishModalTitle').innerHTML = isP
+        ? '<i class="fas fa-check-circle" style="color:#34d399"></i> Publish Exam'
+        : '<i class="fas fa-eye-slash" style="color:#fbbf24"></i> Unpublish Exam';
+    document.getElementById('publishModalMsg').textContent = isP
+        ? `"${title}" will become visible to students once published.`
+        : `"${title}" will be hidden from students. You can republish anytime.`;
+    const ct = document.getElementById('publishConfirmText');
+    if (ct) ct.textContent = isP ? 'Yes, Publish' : 'Yes, Unpublish';
+    const btn = document.getElementById('publishConfirmBtn');
+    btn.className = isP ? 'tv-btn tv-btn-success' : 'tv-btn tv-btn-warning';
     document.getElementById('publishModal').classList.add('show');
 };
 
 async function _confirmPublish() {
-    if (!_publishExamId) return;
-
-    const btn = document.getElementById('confirmPublishBtn');
+    if (!_publishId) return;
+    const btn = document.getElementById('publishConfirmBtn');
     _setBtnLoading(btn, true);
-
     try {
-        const endpoint = _publishAction === 'publish'
-            ? CONFIG.ENDPOINTS.STAFF_EXAM_PUBLISH(_publishExamId)
-            : CONFIG.ENDPOINTS.STAFF_EXAM_UNPUBLISH(_publishExamId);
-
-        const res = await Api.post(endpoint, {});
+        const ep = _publishAct === 'publish'
+            ? CONFIG.ENDPOINTS.STAFF_EXAM_PUBLISH(_publishId)
+            : CONFIG.ENDPOINTS.STAFF_EXAM_UNPUBLISH(_publishId);
+        const res = await Api.post(ep, {});
         const { error } = await Api.parse(res);
-
-        if (error) {
-            UI.showAlert('alertContainer', Auth.extractErrorMessage(error), 'error');
-            _closePublishModal();
-            return;
-        }
-
-        const msg = _publishAction === 'publish'
-            ? 'Exam published successfully! Students can now access it.'
-            : 'Exam unpublished. Students can no longer see it.';
-
-        UI.showAlert('alertContainer', msg, 'success');
-        _closePublishModal();
-        _loadExams();
-
-    } catch (err) {
-        UI.showAlert('alertContainer', 'Network error. Please try again.', 'error');
-        _closePublishModal();
-    } finally {
-        _setBtnLoading(btn, false);
-    }
+        if (error) { UI.toast(Auth.extractErrorMessage(error), 'error'); _closePublish(); return; }
+        UI.toast(_publishAct === 'publish' ? 'Exam published!' : 'Exam unpublished.', 'success');
+        _closePublish(); _loadExams();
+    } catch { UI.toast('Network error.', 'error'); _closePublish(); }
+    finally { _setBtnLoading(btn, false); }
 }
 
-// ── Delete Modal ──────────────────────────────────────────────────────────
+// ── Delete Modal ───────────────────────────────────────────────────
 function _initDeleteModal() {
-    document.getElementById('deleteModalClose')?.addEventListener('click', _closeDeleteModal);
-    document.getElementById('cancelDeleteBtn')?.addEventListener('click', _closeDeleteModal);
-    document.getElementById('deleteModal')?.addEventListener('click', e => {
-        if (e.target.id === 'deleteModal') _closeDeleteModal();
-    });
-    document.getElementById('confirmDeleteBtn')?.addEventListener('click', _confirmDelete);
+    document.getElementById('deleteModalClose')?.addEventListener('click', _closeDelete);
+    document.getElementById('deleteCancelBtn')?.addEventListener('click', _closeDelete);
+    document.getElementById('deleteModal')?.addEventListener('click', e => { if (e.target.id === 'deleteModal') _closeDelete(); });
+    document.getElementById('deleteConfirmBtn')?.addEventListener('click', _confirmDelete);
 }
+function _closeDelete() { document.getElementById('deleteModal').classList.remove('show'); _deleteId = null; }
 
-function _closeDeleteModal() {
-    document.getElementById('deleteModal').classList.remove('show');
-    _deleteExamId = null;
-}
-
-window.openDeleteModal = (examId, examTitle) => {
-    _deleteExamId = examId;
-    document.getElementById('deleteExamName').textContent = examTitle;
+window._openDelete = (id, title) => {
+    _deleteId = id;
+    document.getElementById('deleteExamName').textContent = title;
     document.getElementById('deleteModal').classList.add('show');
 };
 
 async function _confirmDelete() {
-    if (!_deleteExamId) return;
-
-    const btn = document.getElementById('confirmDeleteBtn');
+    if (!_deleteId) return;
+    const btn = document.getElementById('deleteConfirmBtn');
     _setBtnLoading(btn, true);
-
     try {
-        const res = await Api.del(CONFIG.ENDPOINTS.STAFF_EXAM_DETAIL(_deleteExamId));
-
-        // 204 No Content = success
+        const res = await Api.del(CONFIG.ENDPOINTS.STAFF_EXAM_DETAIL(_deleteId));
         if (res.status === 204 || res.ok) {
-            UI.showAlert('alertContainer', 'Exam deleted successfully.', 'success');
-            _closeDeleteModal();
-            _loadExams();
+            UI.toast('Exam deleted.', 'success'); _closeDelete(); _loadExams();
         } else {
             const { error } = await Api.parse(res);
-            UI.showAlert('alertContainer', Auth.extractErrorMessage(error), 'error');
-            _closeDeleteModal();
+            UI.toast(Auth.extractErrorMessage(error), 'error'); _closeDelete();
         }
-
-    } catch (err) {
-        UI.showAlert('alertContainer', 'Network error. Please try again.', 'error');
-        _closeDeleteModal();
-    } finally {
-        _setBtnLoading(btn, false);
-    }
+    } catch { UI.toast('Network error.', 'error'); _closeDelete(); }
+    finally { _setBtnLoading(btn, false); }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────
 function _setBtnLoading(btn, loading) {
     if (!btn) return;
-    const textEl   = btn.querySelector('.btn-text');
-    const loaderEl = btn.querySelector('.btn-loader');
     btn.disabled = loading;
-    textEl?.classList.toggle('hidden', loading);
-    loaderEl?.classList.toggle('hidden', !loading);
+    btn.querySelector('.btn-text')?.classList.toggle('hidden', loading);
+    btn.querySelector('.btn-loader')?.classList.toggle('hidden', !loading);
+}
+function _esc(str) {
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
