@@ -746,3 +746,133 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ══ Live Monitor Dashboard Additions ══════════════════════════════ */
+
+/* 5-col stat grid */
+.stats-grid-5 { grid-template-columns: repeat(5, 1fr); }
+
+/* Live stat tile */
+.stat-card { position: relative; overflow: hidden; }
+.stat-card-live { border: 1.5px solid rgba(239, 68, 68, .15); transition: border-color .3s; }
+.stat-card-live.has-live { border-color: rgba(239, 68, 68, .45); }
+.stat-card-overlay-link { position: absolute; inset: 0; z-index: 1; }
+.stat-icon-live { position: relative; }
+.live-dot-sm {
+    position: absolute; top: -2px; right: -2px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #ef4444; border: 2px solid #fff;
+    animation: liveDot 1.2s ease-in-out infinite;
+    display: none;
+}
+.stat-card-live.has-live .live-dot-sm { display: block; }
+@keyframes liveDot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
+    50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+}
+
+/* Live Monitor Widget */
+.live-monitor-card {
+    grid-column: 1 / -1;            /* full width */
+    border: 1.5px solid rgba(239, 68, 68, .25);
+    background: linear-gradient(135deg, rgba(239,68,68,.04), transparent);
+}
+.live-card-title { display: flex; align-items: center; gap: .75rem; }
+.live-pulse-badge {
+    display: inline-flex; align-items: center; gap: .35rem;
+    background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3);
+    border-radius: 9999px; padding: .2rem .6rem;
+    font-size: .68rem; font-weight: 800; color: #ef4444;
+    text-transform: uppercase; letter-spacing: .07em;
+}
+.lp-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #ef4444;
+    animation: liveDot 1s infinite;
+}
+.card-header-actions { display: flex; align-items: center; gap: .625rem; }
+.live-hint { font-size: .76rem; color: #94a3b8; display: flex; align-items: center; gap: .3rem; }
+.live-hint i { color: #6366f1; font-size: .7rem; }
+.card-icon-btn {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.2);
+    color: #6366f1; cursor: pointer; font-size: .8rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s;
+}
+.card-icon-btn:hover { background: rgba(99,102,241,.16); }
+
+/* Live exam rows */
+.live-exams-list { display: flex; flex-direction: column; gap: .625rem; }
+.live-exam-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .75rem 1rem; border-radius: 10px;
+    background: rgba(239,68,68,.04); border: 1px solid rgba(239,68,68,.1);
+    transition: border-color .2s;
+}
+.live-exam-row:hover { border-color: rgba(239,68,68,.25); }
+.live-exam-left { display: flex; align-items: center; gap: .75rem; flex: 1; min-width: 0; }
+.live-exam-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: #22c55e;
+    flex-shrink: 0; animation: liveDot 1.2s infinite;
+}
+.live-exam-dot.urgent { background: #ef4444; }
+.live-exam-name { font-weight: 700; color: #1e293b; font-size: .9375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-exam-meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .2rem; }
+.live-exam-meta span { font-size: .75rem; color: #64748b; display: flex; align-items: center; gap: .25rem; }
+.live-exam-meta i { color: #6366f1; font-size: .7rem; }
+
+.live-exam-right { display: flex; flex-direction: column; align-items: flex-end; gap: .25rem; flex-shrink: 0; margin-left: 1rem; }
+.live-countdown {
+    font-size: 1.0625rem; font-weight: 800; color: #1e293b;
+    font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums;
+}
+.live-countdown.urgent { color: #ef4444; }
+.live-countdown-lbl { font-size: .68rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; }
+.live-mini-bar { width: 100px; height: 4px; background: #e2e8f0; border-radius: 9999px; overflow: hidden; }
+.live-mini-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 9999px; transition: width .4s; }
+.btn-monitor {
+    display: inline-flex; align-items: center; gap: .35rem;
+    padding: .3rem .75rem; border-radius: 7px;
+    background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25);
+    color: #ef4444; font-size: .78rem; font-weight: 700;
+    text-decoration: none; transition: all .2s; white-space: nowrap;
+}
+.btn-monitor:hover { background: rgba(239,68,68,.18); }
+
+/* Recent Exams — live icon link */
+.exam-item-right { display: flex; align-items: center; gap: .5rem; }
+.exam-live-link {
+    width: 26px; height: 26px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(239,68,68,.1); color: #ef4444; font-size: .75rem;
+    text-decoration: none; transition: all .2s;
+}
+.exam-live-link:hover { background: rgba(239,68,68,.2); }
+
+/* Exam status badges */
+.exam-status { padding: .2rem .6rem; border-radius: 9999px; font-size: .72rem; font-weight: 700; }
+.s-draft     { background: #f1f5f9; color: #64748b; }
+.s-published { background: #eff6ff; color: #2563eb; }
+.s-active    { background: rgba(239,68,68,.1); color: #ef4444; }
+.s-completed { background: #f0fdf4; color: #16a34a; }
+
+/* Quick Actions — live button states */
+.quick-action-live { border: 1.5px solid rgba(239,68,68,.2); }
+.quick-action-live.qa-live-active {
+    background: rgba(239,68,68,.08) !important;
+    border-color: rgba(239,68,68,.4);
+    color: #ef4444;
+}
+.quick-action-live.qa-live-active i { color: #ef4444; }
+
+/* Notification badge */
+.notification-badge.hidden { display: none; }
+
+/* Responsive */
+@media (max-width: 1200px) { .stats-grid-5 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 768px)  { .stats-grid-5 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .stats-grid-5 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 768px) {
+    .live-exam-row { flex-direction: column; align-items: flex-start; gap: .5rem; }
+    .live-exam-right { align-items: flex-start; flex-direction: row; flex-wrap: wrap; margin-left: 0; }
+}
