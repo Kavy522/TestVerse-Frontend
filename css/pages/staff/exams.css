@@ -1,0 +1,195 @@
+/* ===================================================================
+   STAFF EXAMS & QUESTIONS PAGES
+   - Shared styles for listing, creating, and editing exams/questions.
+   =================================================================== */
+
+/* -------------------------------------------------------------------
+   1. TABLE & LISTING STYLES
+   - Used for listing exams, questions, results, etc.
+   ------------------------------------------------------------------- */
+.item-list {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.item-list-header {
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--border-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item-list-title {
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+}
+
+.item-list-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.item-row {
+    display: grid;
+    grid-template-columns: 3fr 1fr 1fr 1fr 1.5fr;
+    gap: var(--space-4);
+    align-items: center;
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--border-primary);
+    transition: background-color var(--transition-fast);
+}
+.item-row:last-child {
+    border-bottom: none;
+}
+.item-row:hover {
+    background-color: var(--bg-secondary);
+}
+
+.item-row-header {
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    color: var(--text-secondary);
+    background-color: var(--bg-secondary);
+}
+.item-row-header:hover {
+    background-color: var(--bg-secondary);
+}
+
+
+.item-cell {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+.item-cell.primary {
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+}
+
+.item-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+/* -------------------------------------------------------------------
+   2. EXAM & QUESTION CREATE/EDIT FORM
+   ------------------------------------------------------------------- */
+.form-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.form-section {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-8);
+}
+.form-section-header {
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 1px solid var(--border-primary);
+}
+.form-section-title {
+    font-size: var(--text-xl);
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+}
+.form-section-body {
+    padding: var(--space-6);
+}
+
+/* Question Options */
+.question-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+.option-input {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+.option-input .form-input {
+    flex-grow: 1;
+}
+
+/* -------------------------------------------------------------------
+   3. FILTERS & PAGINATION
+   ------------------------------------------------------------------- */
+.filters-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-6);
+}
+
+.search-bar {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+}
+.search-bar .input-icon {
+    left: var(--space-3);
+}
+.search-bar .form-input {
+    padding-left: var(--space-9);
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-8);
+}
+.pagination button {
+    padding: var(--space-2) var(--space-3);
+    min-width: 40px;
+}
+
+/* -------------------------------------------------------------------
+   4. RESPONSIVE ADJUSTMENTS
+   ------------------------------------------------------------------- */
+@media (max-width: 992px) {
+    .item-row {
+        grid-template-columns: 2fr 1fr 1fr;
+    }
+    .item-row .d-none-mobile {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-4);
+    }
+    .search-bar {
+        max-width: none;
+    }
+
+    .item-row {
+        grid-template-columns: 1fr;
+        padding: var(--space-4);
+    }
+    .item-row > * {
+        padding-bottom: var(--space-2);
+        border-bottom: 1px dashed var(--border-secondary);
+    }
+    .item-row > *:last-child {
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .item-row-header {
+        display: none;
+    }
+    .item-actions {
+        justify-content: flex-start;
+    }
+}
