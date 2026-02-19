@@ -99,7 +99,7 @@
                     </div>
                     <div class="esb-stat">
                         <span class="esb-stat-val" id="esbTotalQ">0</span>
-                        <span class="esb-stat-lbl">Total Marks</span>
+                        <span class="esb-stat-lbl">Total Points</span>
                     </div>
                     <button class="btn btn-primary btn-sm" id="addQuestionBtn">
                         <i class="fas fa-plus"></i> Add Question
@@ -107,7 +107,7 @@
                 </div>
             </div>
 
-            <!-- Welcome Banner (first visit from examcreate) -->
+            <!-- Welcome Banner -->
             <div class="welcome-banner" id="welcomeBanner" style="display:none;">
                 <div class="wb-icon"><i class="fas fa-party-horn"></i></div>
                 <div class="wb-body">
@@ -117,14 +117,13 @@
                 <button class="wb-close" id="welcomeClose"><i class="fas fa-times"></i></button>
             </div>
 
-            <!-- Question Type Tabs -->
+            <!-- ✅ UPDATED: Question Type Tabs — added multi_mcq, descriptive, coding -->
             <div class="q-toolbar" id="qToolbar" style="display:none;">
                 <div class="q-tabs">
                     <button class="q-tab active" data-type="">All Types</button>
                     <button class="q-tab" data-type="mcq">MCQ</button>
-                    <button class="q-tab" data-type="true_false">True / False</button>
-                    <button class="q-tab" data-type="short_answer">Short Answer</button>
-                    <button class="q-tab" data-type="long_answer">Long Answer</button>
+                    <button class="q-tab" data-type="multiple_mcq">Multi-MCQ</button>
+                    <button class="q-tab" data-type="coding">Coding</button>
                 </div>
                 <div class="q-toolbar-right">
                     <span class="q-count-badge" id="qCountBadge">0 questions</span>
@@ -152,7 +151,7 @@
             <!-- Questions List -->
             <div class="questions-list" id="questionsList" style="display:none;"></div>
 
-            <!-- Add Question FAB (shown when list exists) -->
+            <!-- Add Question Row -->
             <div class="add-q-row" id="addQRow" style="display:none;">
                 <button class="add-q-btn" id="addQRowBtn">
                     <i class="fas fa-plus-circle"></i> Add Another Question
@@ -164,7 +163,7 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
-     QUESTION DRAWER (slide-in panel — works for both ADD & EDIT)
+     QUESTION DRAWER
      ══════════════════════════════════════════════════════════════ -->
 <div class="drawer-backdrop" id="drawerBackdrop"></div>
 <aside class="question-drawer" id="questionDrawer">
@@ -182,7 +181,7 @@
     <div class="drawer-body">
         <div id="drawerAlert"></div>
 
-        <!-- Question Type Selector -->
+        <!-- ✅ UPDATED: Question Type Selector — added multiple_mcq, descriptive, coding -->
         <div class="type-selector-group">
             <label class="drawer-label">Question Type <span class="req">*</span></label>
             <div class="type-selector" id="typeSelector">
@@ -190,17 +189,17 @@
                     <i class="fas fa-list-ul"></i>
                     <span>MCQ</span>
                 </button>
-                <button type="button" class="type-btn" data-value="true_false">
-                    <i class="fas fa-toggle-on"></i>
-                    <span>True/False</span>
+                <button type="button" class="type-btn" data-value="multiple_mcq">
+                    <i class="fas fa-tasks"></i>
+                    <span>Multi-MCQ</span>
                 </button>
-                <button type="button" class="type-btn" data-value="short_answer">
-                    <i class="fas fa-align-left"></i>
-                    <span>Short Ans</span>
+                <button type="button" class="type-btn" data-value="descriptive">
+                    <i class="fas fa-pen-nib"></i>
+                    <span>Descriptive</span>
                 </button>
-                <button type="button" class="type-btn" data-value="long_answer">
-                    <i class="fas fa-align-justify"></i>
-                    <span>Long Ans</span>
+                <button type="button" class="type-btn" data-value="coding">
+                    <i class="fas fa-code"></i>
+                    <span>Coding</span>
                 </button>
             </div>
         </div>
@@ -213,7 +212,7 @@
             <span class="drawer-error" id="qTextErr"></span>
         </div>
 
-        <!-- MCQ Options -->
+        <!-- MCQ / Multi-MCQ Options -->
         <div id="mcqSection">
             <div class="drawer-field">
                 <div class="options-header">
@@ -226,7 +225,14 @@
                 <span class="drawer-error" id="qOptionsErr"></span>
             </div>
             <div class="drawer-field">
-                <label class="drawer-label">Correct Answer <span class="req">*</span></label>
+                <!-- ✅ id and label updated via JS for multi-select; hint shown for multiple_mcq -->
+                <label class="drawer-label" id="correctLabel">
+                    Correct Answer <span class="req">*</span>
+                </label>
+                <p class="drawer-help" id="multiHint" style="display:none;">
+                    <i class="fas fa-info-circle"></i>
+                    Hold <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> to select multiple correct answers.
+                </p>
                 <select id="correctOption" class="drawer-select">
                     <option value="">— select correct option —</option>
                 </select>
@@ -264,13 +270,56 @@
             </div>
         </div>
 
-        <!-- Marks + Order Row -->
+        <!-- ✅ NEW: Descriptive Section -->
+        <div id="descriptiveSection" style="display:none;">
+            <div class="drawer-field">
+                <label class="drawer-label">
+                    Expected Answer
+                    <span class="optional-tag">Optional</span>
+                </label>
+                <textarea id="expectedAnswer" class="drawer-textarea" rows="4"
+                    placeholder="Describe what a good answer should contain…"></textarea>
+            </div>
+        </div>
+
+        <!-- ✅ NEW: Coding Section -->
+        <div id="codingSection" style="display:none;">
+            <div class="drawer-field">
+                <label class="drawer-label" for="codingLanguage">Language <span class="req">*</span></label>
+                <select id="codingLanguage" class="drawer-select">
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                    <option value="c">C</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="go">Go</option>
+                    <option value="rust">Rust</option>
+                    <option value="ruby">Ruby</option>
+                    <option value="kotlin">Kotlin</option>
+                </select>
+            </div>
+            <div class="drawer-field">
+                <div class="options-header">
+                    <label class="drawer-label">
+                        Test Cases
+                        <span class="optional-tag">Optional</span>
+                    </label>
+                    <button type="button" class="add-option-btn" id="addTestCaseBtn">
+                        <i class="fas fa-plus"></i> Add Test Case
+                    </button>
+                </div>
+                <div id="testCasesList"></div>
+            </div>
+        </div>
+
+        <!-- ✅ FIX: id renamed qMarks → qPoints, label "Marks" → "Points", error id qPointsErr -->
         <div class="drawer-row-2">
             <div class="drawer-field">
-                <label class="drawer-label" for="qMarks">Marks <span class="req">*</span></label>
-                <input type="number" id="qMarks" class="drawer-input"
+                <label class="drawer-label" for="qPoints">Points <span class="req">*</span></label>
+                <input type="number" id="qPoints" class="drawer-input"
                     placeholder="e.g. 2" min="0.5" max="100" step="0.5">
-                <span class="drawer-error" id="qMarksErr"></span>
+                <span class="drawer-error" id="qPointsErr"></span>
             </div>
             <div class="drawer-field">
                 <label class="drawer-label" for="qOrder">Order / Position</label>

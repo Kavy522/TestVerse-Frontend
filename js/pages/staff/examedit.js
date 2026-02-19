@@ -1,22 +1,25 @@
 /**
  * TestVerse — Staff: Exam Question Editor
- * Works for BOTH first-time add (from examcreate) AND editing existing questions.
  * URL params:  ?id=<examId>   required
  *              ?new=1         optional — shows welcome banner
+ *
+ * ✅ FIXED:
+ *   - Backend field is "points" NOT "marks"  → _buildPayload sends points
+ *   - Backend field is "type" NOT "question_type"
+ *   - Supports: mcq | multiple_mcq | descriptive | coding
  */
 'use strict';
 
 // ── State ──────────────────────────────────────────────────────────
-let _examId       = null;
-let _exam         = null;
-let _questions    = [];       // full list from API
-let _filtered     = [];       // after type-tab filter
-let _typeFilter   = '';
-let _drawerMode   = 'add';    // 'add' | 'edit'
-let _editQId      = null;
-let _deleteQId    = null;
-let _saving       = false;
-let _optionCount  = 0;        // tracks letters A B C D…
+let _examId      = null;
+let _exam        = null;
+let _questions   = [];
+let _filtered    = [];
+let _typeFilter  = '';
+let _drawerMode  = 'add';   // 'add' | 'edit'
+let _editQId     = null;
+let _deleteQId   = null;
+let _saving      = false;
 
 // ── Boot ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -35,7 +38,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await _loadExam();
     await _loadQuestions();
 
-    // Welcome banner for fresh exam
     if (params.get('new') === '1') _showWelcome();
 });
 
@@ -50,10 +52,10 @@ function _initUser() {
 
 // ── Sidebar ────────────────────────────────────────────────────────
 function _initSidebar() {
-    const sb  = document.getElementById('sidebar');
-    const ov  = document.getElementById('sidebarOverlay');
-    const open = () => { sb.classList.add('open'); ov.classList.add('show'); };
-    const close= () => { sb.classList.remove('open'); ov.classList.remove('show'); };
+    const sb   = document.getElementById('sidebar');
+    const ov   = document.getElementById('sidebarOverlay');
+    const open = () => { sb?.classList.add('open');    ov?.classList.add('show'); };
+    const close= () => { sb?.classList.remove('open'); ov?.classList.remove('show'); };
     document.getElementById('menuToggle')?.addEventListener('click', open);
     document.getElementById('sidebarClose')?.addEventListener('click', close);
     ov?.addEventListener('click', close);
@@ -62,7 +64,7 @@ function _initSidebar() {
     });
 }
 
-// ── Load Exam Details ──────────────────────────────────────────────
+// ── Load Exam ──────────────────────────────────────────────────────
 async function _loadExam() {
     try {
         const res = await Api.get(CONFIG.ENDPOINTS.STAFF_EXAM_DETAIL(_examId));
@@ -74,19 +76,23 @@ async function _loadExam() {
 }
 
 function _renderExamBar(exam) {
-    const typeMap = { midterm:'Midterm', final:'Final', quiz:'Quiz', assignment:'Assignment', practice:'Practice' };
-    const status  = exam.is_published
-        ? (new Date() > new Date(exam.end_time) ? 'Completed' : new Date() >= new Date(exam.start_time) ? 'Live' : 'Published')
-        : 'Draft';
-
-    _set('esbTitle', exam.title || '—');
-    _set('esbType',  typeMap[exam.exam_type] || exam.exam_type || '—');
+    const typeLabel = { mcq:'MCQ Only', mixed:'Mixed', descriptive:'Descriptive', coding:'Coding' };
+    const now = new Date();
+    let status = 'Draft';
+    if (exam.is_published) {
+        if      (now > new Date(exam.end_time))    status = 'Completed';
+        else if (now >= new Date(exam.start_time)) status = 'Live';
+        else                                       status = 'Published';
+    }
+    _set('esbTitle',    exam.title || '—');
+    _set('esbType',     typeLabel[exam.exam_type] || exam.exam_type || '—');
     _set('esbDuration', `${exam.duration || 0} min`);
-    _set('esbMarks', `${exam.total_marks || 0} marks`);
-    _set('esbStatus', status);
+    _set('esbMarks',    `${exam.total_marks || 0} marks`);
+    _set('esbStatus',   status);
     _set('breadcrumbExamTitle', exam.title || 'Questions');
     document.title = `${exam.title} — Questions | TestVerse`;
-    document.getElementById('examSummaryBar').style.display = '';
+    const bar = document.getElementById('examSummaryBar');
+    if (bar) bar.style.display = '';
 }
 
 // ── Load Questions ─────────────────────────────────────────────────
@@ -103,7 +109,6 @@ async function _loadQuestions() {
             ? data
             : (data?.results || data?.questions || []);
 
-        // Sort by order field if present
         _questions.sort((a, b) => (a.order || 0) - (b.order || 0));
         _applyFilter();
         _updateSummaryStats();
@@ -115,7 +120,7 @@ async function _loadQuestions() {
 
 function _applyFilter() {
     _filtered = _typeFilter
-        ? _questions.filter(q => q.question_type === _typeFilter)
+        ? _questions.filter(q => (q.type || q.question_type) === _typeFilter)
         : [..._questions];
     _renderQuestions();
 }
@@ -130,38 +135,40 @@ function _renderQuestions() {
     const badge = document.getElementById('qCountBadge');
     if (badge) badge.textContent = `${_filtered.length} question${_filtered.length !== 1 ? 's' : ''}`;
 
-    if (_questions.length === 0) {
-        _showEmpty(); return;
-    }
+    if (_questions.length === 0) { _showEmpty(); return; }
 
     document.getElementById('emptyState').style.display = 'none';
-    tb.style.display   = '';
-    list.style.display = '';
-    addR.style.display = '';
+    if (tb)   tb.style.display   = '';
+    if (list) list.style.display = '';
+    if (addR) addR.style.display = '';
 
     list.innerHTML = _filtered.map((q, i) => _buildQCard(q, i + 1)).join('');
 
-    // Bind action buttons
-    list.querySelectorAll('.q-action-btn.edit').forEach(btn => {
-        btn.addEventListener('click', () => _openDrawerEdit(btn.dataset.id));
-    });
-    list.querySelectorAll('.q-action-btn.del').forEach(btn => {
-        btn.addEventListener('click', () => _openDeleteModal(btn.dataset.id));
-    });
+    list.querySelectorAll('.q-action-btn.edit').forEach(btn =>
+        btn.addEventListener('click', () => _openDrawerEdit(btn.dataset.id))
+    );
+    list.querySelectorAll('.q-action-btn.del').forEach(btn =>
+        btn.addEventListener('click', () => _openDeleteModal(btn.dataset.id))
+    );
 }
 
 function _buildQCard(q, num) {
-    const typeLabel = { mcq:'MCQ', true_false:'True/False', short_answer:'Short Answer', long_answer:'Long Answer' };
-    const type = q.question_type || 'mcq';
-
+    const typeLabel = {
+        mcq: 'MCQ', multiple_mcq: 'Multi-MCQ',
+        descriptive: 'Descriptive', coding: 'Coding',
+        true_false: 'True/False', short_answer: 'Short Answer', long_answer: 'Long Answer'
+    };
+    const type = q.type || q.question_type || 'mcq';
+    // ✅ backend returns "points" — fallback to "marks" for safety
+    const pts  = q.points ?? q.marks ?? 0;
     let bodyHtml = '';
 
-    if (type === 'mcq' && Array.isArray(q.options) && q.options.length) {
+    if ((type === 'mcq' || type === 'multiple_mcq') && Array.isArray(q.options) && q.options.length) {
         bodyHtml = `<div class="q-card-options">` +
             q.options.map((opt, i) => {
-                const letter = String.fromCharCode(65 + i);
-                const isCorrect = String(opt.id) === String(q.correct_option)
-                    || opt.is_correct
+                const letter    = String.fromCharCode(65 + i);
+                const isCorrect = opt.is_correct === true
+                    || String(opt.id) === String(q.correct_option)
                     || String(opt.value || opt.text) === String(q.correct_option);
                 return `<div class="q-option ${isCorrect ? 'correct' : ''}">
                     <div class="q-option-indicator">${isCorrect ? '<i class="fas fa-check"></i>' : letter}</div>
@@ -171,7 +178,7 @@ function _buildQCard(q, num) {
     }
 
     if (type === 'true_false') {
-        const ans = String(q.correct_answer).toLowerCase();
+        const ans = String(q.correct_answer || '').toLowerCase();
         bodyHtml = `<div class="q-tf-answer ${ans}">
             <i class="fas fa-${ans === 'true' ? 'check' : 'times'}"></i>
             Correct answer: <strong>${ans === 'true' ? 'True' : 'False'}</strong>
@@ -181,6 +188,21 @@ function _buildQCard(q, num) {
     if ((type === 'short_answer' || type === 'long_answer') && q.model_answer) {
         bodyHtml = `<div class="q-model-answer">
             <strong>Model answer:</strong> ${_esc(q.model_answer)}
+        </div>`;
+    }
+
+    if (type === 'descriptive' && q.expected_answer) {
+        bodyHtml = `<div class="q-model-answer">
+            <strong>Expected answer:</strong> ${_esc(q.expected_answer)}
+        </div>`;
+    }
+
+    if (type === 'coding') {
+        const tcCount = q.test_cases?.length ?? 0;
+        bodyHtml = `<div class="q-model-answer">
+            <i class="fas fa-code" style="color:#b45309;margin-right:.35rem;"></i>
+            <strong>${_esc(q.language || 'Unknown language')}</strong>
+            ${tcCount ? `&nbsp;·&nbsp; ${tcCount} test case${tcCount !== 1 ? 's' : ''}` : ''}
         </div>`;
     }
 
@@ -200,7 +222,10 @@ function _buildQCard(q, num) {
                     <p class="q-text">${_esc(q.text || q.question_text || '')}</p>
                     <div class="q-badges">
                         <span class="q-type-badge ${type}">${typeLabel[type] || type}</span>
-                        <span class="q-marks-badge"><i class="fas fa-star"></i> ${q.marks || 0} mark${q.marks !== 1 ? 's' : ''}</span>
+                        <span class="q-marks-badge">
+                            <i class="fas fa-star"></i>
+                            ${pts} pt${parseFloat(pts) !== 1 ? 's' : ''}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -219,10 +244,10 @@ function _buildQCard(q, num) {
 
 // ── Summary Stats ──────────────────────────────────────────────────
 function _updateSummaryStats() {
-    const total = _questions.length;
-    const totalMarks = _questions.reduce((s, q) => s + (parseFloat(q.marks) || 0), 0);
-    _set('esbQCount', total);
-    _set('esbTotalQ', totalMarks % 1 === 0 ? totalMarks : totalMarks.toFixed(1));
+    // ✅ backend returns "points" — fallback to "marks"
+    const totalPts = _questions.reduce((s, q) => s + (parseFloat(q.points ?? q.marks) || 0), 0);
+    _set('esbQCount', _questions.length);
+    _set('esbTotalQ', totalPts % 1 === 0 ? totalPts : totalPts.toFixed(1));
 }
 
 // ── Type Tabs ──────────────────────────────────────────────────────
@@ -251,34 +276,28 @@ function _showWelcome() {
 // ═══════════════════════════════════════════════════════════════════
 
 function _initDrawer() {
-    // Open triggers
     document.getElementById('addQuestionBtn')?.addEventListener('click',  () => _openDrawerAdd());
     document.getElementById('emptyAddBtn')?.addEventListener('click',     () => _openDrawerAdd());
     document.getElementById('addQRowBtn')?.addEventListener('click',      () => _openDrawerAdd());
 
-    // Close
     document.getElementById('drawerClose')?.addEventListener('click',      _closeDrawer);
     document.getElementById('drawerCancelBtn')?.addEventListener('click',  _closeDrawer);
     document.getElementById('drawerBackdrop')?.addEventListener('click',   _closeDrawer);
 
-    // Save buttons
     document.getElementById('drawerSaveBtn')?.addEventListener('click',    () => _saveQuestion(false));
     document.getElementById('drawerSaveAddBtn')?.addEventListener('click', () => _saveQuestion(true));
 
-    // Type selector
-    document.querySelectorAll('.type-btn').forEach(btn => {
-        btn.addEventListener('click', () => _setQType(btn.dataset.value));
-    });
+    document.querySelectorAll('.type-btn').forEach(btn =>
+        btn.addEventListener('click', () => _setQType(btn.dataset.value))
+    );
 
-    // MCQ add option
     document.getElementById('addOptionBtn')?.addEventListener('click', _addOptionRow);
+    document.getElementById('addTestCaseBtn')?.addEventListener('click', () => _addTcRow());
 
-    // Keyboard close
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') _closeDrawer();
     });
 
-    // Build initial 4 MCQ options
     _resetOptions();
 }
 
@@ -288,7 +307,8 @@ function _openDrawerAdd() {
     _resetDrawer();
     _set('drawerTitle',    'Add Question');
     _set('drawerSubtitle', `Exam: ${_exam?.title || ''}`);
-    document.getElementById('drawerIcon').innerHTML = '<i class="fas fa-plus"></i>';
+    const icon = document.getElementById('drawerIcon');
+    if (icon) icon.innerHTML = '<i class="fas fa-plus"></i>';
     _openDrawer();
 }
 
@@ -300,7 +320,8 @@ function _openDrawerEdit(qId) {
     _resetDrawer();
     _set('drawerTitle',    'Edit Question');
     _set('drawerSubtitle', `Editing Q${_questions.indexOf(q) + 1}`);
-    document.getElementById('drawerIcon').innerHTML = '<i class="fas fa-edit"></i>';
+    const icon = document.getElementById('drawerIcon');
+    if (icon) icon.innerHTML = '<i class="fas fa-edit"></i>';
     _populateDrawer(q);
     _openDrawer();
 }
@@ -322,73 +343,108 @@ function _closeDrawer() {
 // ── Reset Drawer ───────────────────────────────────────────────────
 function _resetDrawer() {
     _clearEl('drawerAlert');
-    _val('qText', '');
-    _val('qMarks', '');
-    _val('qOrder', '');
+    _val('qText',        '');
+    _val('qPoints',      '');   // ✅ FIX: was qMarks
+    _val('qOrder',       '');
     _val('qExplanation', '');
-    _val('modelAnswer', '');
-    _val('correctOption', '');
-    // Reset TF
+    _val('modelAnswer',  '');
+    _val('expectedAnswer', '');
+    _val('codingLanguage', 'python');
+
+    const tcList = document.getElementById('testCasesList');
+    if (tcList) tcList.innerHTML = '';
+
     document.querySelectorAll('input[name="tfAnswer"]').forEach(r => r.checked = false);
-    // Reset type to MCQ
+
     _setQType('mcq');
-    // Clear errors
-    ['qTextErr','qOptionsErr','qCorrectErr','qTfErr','qMarksErr'].forEach(_clearEl);
+    _resetOptions();
+
+    // ✅ FIX: error element id is qPointsErr
+    ['qTextErr', 'qOptionsErr', 'qCorrectErr', 'qTfErr', 'qPointsErr'].forEach(_clearEl);
 }
 
 // ── Populate Drawer for Edit ───────────────────────────────────────
 function _populateDrawer(q) {
-    const type = q.question_type || 'mcq';
+    const type = q.type || q.question_type || 'mcq';
     _setQType(type);
-    _val('qText', q.text || q.question_text || '');
-    _val('qMarks', q.marks || '');
-    _val('qOrder', q.order || '');
+    _val('qText',        q.text || q.question_text || '');
+    // ✅ FIX: backend returns "points" — fallback to "marks"
+    _val('qPoints',      q.points ?? q.marks ?? '');
+    _val('qOrder',       q.order || '');
     _val('qExplanation', q.explanation || '');
-    _val('modelAnswer', q.model_answer || '');
 
-    if (type === 'mcq') {
-        _resetOptions();
-        // Load saved options
-        const opts = q.options || [];
-        const rows = document.querySelectorAll('.option-row');
+    if (type === 'mcq' || type === 'multiple_mcq') {
+        const opts = Array.isArray(q.options) ? q.options : [];
+        document.getElementById('optionsList').innerHTML = '';
 
-        opts.forEach((opt, i) => {
-            if (i < rows.length) {
-                rows[i].querySelector('.option-input').value = opt.text || opt.value || '';
-            } else {
-                _addOptionRow(opt.text || opt.value || '');
-            }
-        });
-        // Trim excess rows if API returned fewer options
-        const allRows = document.querySelectorAll('.option-row');
-        allRows.forEach((row, i) => {
-            if (i >= opts.length && opts.length >= 2) row.remove();
-        });
+        opts.forEach(opt => _addOptionRow(opt.text || opt.value || ''));
+        const cur = document.querySelectorAll('.option-row').length;
+        for (let i = cur; i < 2; i++) _addOptionRow();
+
         _syncCorrectSelect();
 
-        // Set correct option
-        const correctIdx = opts.findIndex(o =>
-            String(o.id) === String(q.correct_option) || o.is_correct === true);
-        if (correctIdx !== -1) {
-            const sel = document.getElementById('correctOption');
-            if (sel) sel.value = String(correctIdx);
+        // Restore correct selections AFTER sync
+        const sel = document.getElementById('correctOption');
+        if (sel) {
+            [...sel.options].forEach(o => { o.selected = false; });
+            opts.forEach((opt, i) => {
+                const isCorrect = opt.is_correct === true
+                    || String(opt.id) === String(q.correct_option);
+                if (isCorrect) {
+                    const match = [...sel.options].find(x => x.value === String(i));
+                    if (match) match.selected = true;
+                }
+            });
         }
     }
 
     if (type === 'true_false') {
-        const ans = String(q.correct_answer).toLowerCase();
-        document.querySelector(`input[name="tfAnswer"][value="${ans}"]`).checked = true;
+        const ans = String(q.correct_answer || '').toLowerCase();
+        const radio = document.querySelector(`input[name="tfAnswer"][value="${ans}"]`);
+        if (radio) radio.checked = true;
+    }
+
+    if (type === 'short_answer' || type === 'long_answer') {
+        _val('modelAnswer', q.model_answer || '');
+    }
+
+    if (type === 'descriptive') {
+        _val('expectedAnswer', q.expected_answer || '');
+    }
+
+    if (type === 'coding') {
+        _val('codingLanguage', q.language || 'python');
+        (q.test_cases || []).forEach(tc => _addTcRow(tc));
     }
 }
 
-// ── Set Question Type (shows/hides sections) ───────────────────────
+// ── Set Question Type ──────────────────────────────────────────────
 function _setQType(type) {
-    document.querySelectorAll('.type-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.value === type);
-    });
-    document.getElementById('mcqSection').style.display      = type === 'mcq'          ? '' : 'none';
-    document.getElementById('tfSection').style.display       = type === 'true_false'   ? '' : 'none';
-    document.getElementById('saSection').style.display       = (type === 'short_answer' || type === 'long_answer') ? '' : 'none';
+    document.querySelectorAll('.type-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.value === type)
+    );
+
+    const isMcq = type === 'mcq' || type === 'multiple_mcq';
+    const mcqSec  = document.getElementById('mcqSection');
+    const tfSec   = document.getElementById('tfSection');
+    const saSec   = document.getElementById('saSection');
+    const descSec = document.getElementById('descriptiveSection');
+    const codeSec = document.getElementById('codingSection');
+
+    if (mcqSec)  mcqSec.style.display  = isMcq ? '' : 'none';
+    if (tfSec)   tfSec.style.display   = type === 'true_false'   ? '' : 'none';
+    if (saSec)   saSec.style.display   = (type === 'short_answer' || type === 'long_answer') ? '' : 'none';
+    if (descSec) descSec.style.display = type === 'descriptive'  ? '' : 'none';
+    if (codeSec) codeSec.style.display = type === 'coding'       ? '' : 'none';
+
+    const sel       = document.getElementById('correctOption');
+    const multiHint = document.getElementById('multiHint');
+    const lbl       = document.getElementById('correctLabel');
+    if (sel)       sel.multiple = (type === 'multiple_mcq');
+    if (multiHint) multiHint.style.display = type === 'multiple_mcq' ? '' : 'none';
+    if (lbl)       lbl.innerHTML = type === 'multiple_mcq'
+        ? 'Correct Answers <span class="req">*</span> <span class="optional-tag">multi-select</span>'
+        : 'Correct Answer <span class="req">*</span>';
 }
 
 function _currentType() {
@@ -400,7 +456,6 @@ function _resetOptions() {
     const list = document.getElementById('optionsList');
     if (!list) return;
     list.innerHTML = '';
-    _optionCount = 0;
     ['Option A', 'Option B', 'Option C', 'Option D'].forEach(ph => _addOptionRow('', ph));
     _syncCorrectSelect();
 }
@@ -408,18 +463,20 @@ function _resetOptions() {
 function _addOptionRow(value = '', placeholder = '') {
     const list = document.getElementById('optionsList');
     if (!list) return;
-    const count = list.querySelectorAll('.option-row').length;
+    const count  = list.querySelectorAll('.option-row').length;
     if (count >= 6) { _showAlert('Maximum 6 options allowed.', 'info'); return; }
     const letter = String.fromCharCode(65 + count);
-    const row = document.createElement('div');
+    const row    = document.createElement('div');
     row.className = 'option-row';
-    row.dataset.idx = count;
     row.innerHTML = `
         <div class="option-letter">${letter}</div>
-        <input type="text" class="option-input" placeholder="${placeholder || 'Option ' + letter}" value="${_esc(value)}" maxlength="500">
+        <input type="text" class="option-input"
+            placeholder="${placeholder || 'Option ' + letter}"
+            value="${_esc(value)}" maxlength="500">
         <button type="button" class="option-remove" title="Remove option">
             <i class="fas fa-times"></i>
         </button>`;
+
     row.querySelector('.option-remove').addEventListener('click', () => {
         if (list.querySelectorAll('.option-row').length <= 2) {
             _showAlert('Minimum 2 options required.', 'info'); return;
@@ -428,7 +485,20 @@ function _addOptionRow(value = '', placeholder = '') {
         _relabelOptions();
         _syncCorrectSelect();
     });
-    row.querySelector('.option-input').addEventListener('input', _syncCorrectSelect);
+
+    // ✅ Preserve selection across input events
+    row.querySelector('.option-input').addEventListener('input', () => {
+        const sel  = document.getElementById('correctOption');
+        const prev = sel ? [...sel.selectedOptions].map(o => o.value) : [];
+        _syncCorrectSelect();
+        if (sel && prev.length) {
+            prev.forEach(v => {
+                const o = [...sel.options].find(x => x.value === v);
+                if (o) o.selected = true;
+            });
+        }
+    });
+
     list.appendChild(row);
     _syncCorrectSelect();
 }
@@ -442,43 +512,88 @@ function _relabelOptions() {
 function _syncCorrectSelect() {
     const sel = document.getElementById('correctOption');
     if (!sel) return;
-    const prev = sel.value;
-    const rows = document.querySelectorAll('.option-row');
+    // Save selection before full rebuild
+    const prevSelected = [...sel.selectedOptions].map(o => o.value);
+    const rows = [...document.querySelectorAll('.option-row')];
     sel.innerHTML = '<option value="">— select correct answer —</option>';
     rows.forEach((row, i) => {
-        const txt = row.querySelector('.option-input').value.trim();
+        const txt    = row.querySelector('.option-input')?.value.trim() || '';
         const letter = String.fromCharCode(65 + i);
-        const opt = document.createElement('option');
-        opt.value = String(i);
+        const opt    = document.createElement('option');
+        opt.value    = String(i);
         opt.textContent = `${letter}: ${txt || '(empty)'}`;
+        // ✅ Restore selection after rebuild
+        if (prevSelected.includes(String(i))) opt.selected = true;
         sel.appendChild(opt);
     });
-    if (prev !== '') sel.value = prev;
 }
 
-// ── Validate Drawer ────────────────────────────────────────────────
+// ── Test Cases (Coding) ────────────────────────────────────────────
+function _addTcRow(tc = {}) {
+    const list = document.getElementById('testCasesList');
+    if (!list) return;
+    const n   = list.querySelectorAll('.test-case-row').length + 1;
+    const row = document.createElement('div');
+    row.className = 'test-case-row';
+    row.innerHTML = `
+        <div class="tc-header">
+            <span class="tc-label">Test Case ${n}</span>
+            <button type="button" class="option-remove" title="Remove">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="tc-fields">
+            <div class="tc-field">
+                <label>Input</label>
+                <textarea class="tc-textarea tc-input"
+                    placeholder="e.g. [1,2,3]">${_esc(tc.input || '')}</textarea>
+            </div>
+            <div class="tc-field">
+                <label>Expected Output</label>
+                <textarea class="tc-textarea tc-output"
+                    placeholder="e.g. [3,2,1]">${_esc(tc.expected_output || '')}</textarea>
+            </div>
+        </div>`;
+    row.querySelector('.option-remove').addEventListener('click', () => {
+        row.remove(); _relabelTc();
+    });
+    list.appendChild(row);
+}
+
+function _relabelTc() {
+    document.querySelectorAll('.tc-label').forEach((el, i) => {
+        el.textContent = `Test Case ${i + 1}`;
+    });
+}
+
+// ── Validate ───────────────────────────────────────────────────────
 function _validateDrawer() {
     let ok = true;
     const type = _currentType();
 
+    // Question text
     const text = document.getElementById('qText')?.value.trim();
     if (!text) { _setErr('qTextErr', 'Question text is required'); ok = false; }
     else _clearEl('qTextErr');
 
-    const marks = parseFloat(document.getElementById('qMarks')?.value);
-    if (!marks || marks <= 0) { _setErr('qMarksErr', 'Enter valid marks (> 0)'); ok = false; }
-    else _clearEl('qMarksErr');
+    // ✅ FIX: read qPoints, show qPointsErr, explicit empty-string check
+    const ptsRaw = document.getElementById('qPoints')?.value ?? '';
+    const pts    = parseFloat(ptsRaw);
+    if (ptsRaw.trim() === '' || isNaN(pts) || pts <= 0) {
+        _setErr('qPointsErr', 'Enter valid points (> 0)'); ok = false;
+    } else _clearEl('qPointsErr');
 
-    if (type === 'mcq') {
-        const rows = document.querySelectorAll('.option-row');
+    if (type === 'mcq' || type === 'multiple_mcq') {
+        const rows   = document.querySelectorAll('.option-row');
         const filled = [...rows].filter(r => r.querySelector('.option-input').value.trim());
         if (filled.length < 2) { _setErr('qOptionsErr', 'At least 2 options required'); ok = false; }
         else _clearEl('qOptionsErr');
 
-        const correct = document.getElementById('correctOption')?.value;
-        if (correct === '' || correct === null || correct === undefined) {
-            _setErr('qCorrectErr', 'Select the correct answer'); ok = false;
-        } else _clearEl('qCorrectErr');
+        // ✅ FIX: check selectedOptions array, not .value string
+        const sel    = document.getElementById('correctOption');
+        const chosen = sel ? [...sel.selectedOptions].filter(o => o.value !== '') : [];
+        if (chosen.length === 0) { _setErr('qCorrectErr', 'Select the correct answer'); ok = false; }
+        else _clearEl('qCorrectErr');
     }
 
     if (type === 'true_false') {
@@ -494,34 +609,46 @@ function _validateDrawer() {
 function _buildPayload() {
     const type  = _currentType();
     const text  = document.getElementById('qText').value.trim();
-    const marks = parseFloat(document.getElementById('qMarks').value);
-    const order = parseInt(document.getElementById('qOrder').value) || undefined;
-    const expl  = document.getElementById('qExplanation').value.trim();
-    const payload = {
-        question_type: type,
-        text,
-        marks,
-        explanation: expl || '',
-    };
-    if (order) payload.order = order;
+    // ✅ KEY FIX: backend field is "points" NOT "marks"
+    const points = parseFloat(document.getElementById('qPoints').value);
+    const order  = parseInt(document.getElementById('qOrder').value) || undefined;
+    const expl   = document.getElementById('qExplanation').value.trim();
 
-    if (type === 'mcq') {
-        const rows   = document.querySelectorAll('.option-row');
-        const options = [...rows]
+    const payload = { type, text, points };
+    if (order) payload.order       = order;
+    if (expl)  payload.explanation = expl;
+
+    if (type === 'mcq' || type === 'multiple_mcq') {
+        const rows = document.querySelectorAll('.option-row');
+        const sel  = document.getElementById('correctOption');
+        const correctIdxs = [...(sel?.selectedOptions || [])]
+            .map(o => parseInt(o.value))
+            .filter(n => !isNaN(n));
+
+        payload.options = [...rows]
             .map(r => r.querySelector('.option-input').value.trim())
             .filter(Boolean)
-            .map(text => ({ text }));
-        const correctIdx = parseInt(document.getElementById('correctOption').value);
-        payload.options         = options;
-        payload.correct_option  = correctIdx;   // backend expects index or option text
+            .map((t, i) => ({ text: t, is_correct: correctIdxs.includes(i) }));
     }
 
     if (type === 'true_false') {
-        payload.correct_answer = document.querySelector('input[name="tfAnswer"]:checked').value;
+        payload.correct_answer = document.querySelector('input[name="tfAnswer"]:checked')?.value;
     }
 
     if (type === 'short_answer' || type === 'long_answer') {
-        payload.model_answer = document.getElementById('modelAnswer').value.trim();
+        payload.model_answer = document.getElementById('modelAnswer')?.value.trim() || '';
+    }
+
+    if (type === 'descriptive') {
+        payload.expected_answer = document.getElementById('expectedAnswer')?.value.trim() || '';
+    }
+
+    if (type === 'coding') {
+        payload.language   = document.getElementById('codingLanguage')?.value || 'python';
+        payload.test_cases = [...document.querySelectorAll('.test-case-row')].map(r => ({
+            input:           r.querySelector('.tc-input')?.value.trim()  || '',
+            expected_output: r.querySelector('.tc-output')?.value.trim() || '',
+        })).filter(tc => tc.input || tc.expected_output);
     }
 
     return payload;
@@ -542,15 +669,11 @@ async function _saveQuestion(addAnother) {
     const payload = _buildPayload();
 
     try {
-        let res, data, error;
+        const res = _drawerMode === 'add'
+            ? await Api.post(CONFIG.ENDPOINTS.STAFF_QUESTIONS(_examId), payload)
+            : await Api.patch(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_editQId), payload);
 
-        if (_drawerMode === 'add') {
-            res = await Api.post(CONFIG.ENDPOINTS.STAFF_QUESTIONS(_examId), payload);
-        } else {
-            res = await Api.patch(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_editQId), payload);
-        }
-
-        ({ data, error } = await Api.parse(res));
+        const { data, error } = await Api.parse(res);
 
         if (error) {
             _setEl('drawerAlert', _alertHtml(_extractErr(error), 'error'));
@@ -559,7 +682,6 @@ async function _saveQuestion(addAnother) {
             return;
         }
 
-        // Update local state
         if (_drawerMode === 'add') {
             _questions.push(data);
         } else {
@@ -575,7 +697,7 @@ async function _saveQuestion(addAnother) {
             _setBtnLoading(btn, false);
             _saving = false;
             _resetDrawer();
-            _set('drawerTitle', 'Add Question');
+            _set('drawerTitle',    'Add Question');
             _set('drawerSubtitle', `Question ${_questions.length + 1}`);
             _setEl('drawerAlert', _alertHtml('Question saved! Add another.', 'success'));
         } else {
@@ -653,7 +775,7 @@ function _showEmpty() {
     document.getElementById('emptyState').style.display     = '';
 }
 
-// ── Global Alert ───────────────────────────────────────────────────
+// ── Alerts ─────────────────────────────────────────────────────────
 function _showAlert(msg, type) {
     const wrap = document.getElementById('alertContainer'); if (!wrap) return;
     wrap.innerHTML = _alertHtml(msg, type);
@@ -665,12 +787,12 @@ function _alertHtml(msg, type) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
-function _set(id, val)  { const el = document.getElementById(id); if (el) el.textContent = val; }
-function _img(id, src)  { const el = document.getElementById(id); if (el) el.src = src; }
-function _val(id, val)  { const el = document.getElementById(id); if (el) el.value = val; }
-function _clearEl(id)   { const el = document.getElementById(id); if (el) el.textContent = ''; }
+function _set(id, val)   { const el = document.getElementById(id); if (el) el.textContent = val; }
+function _img(id, src)   { const el = document.getElementById(id); if (el) el.src = src; }
+function _val(id, val)   { const el = document.getElementById(id); if (el) el.value = val; }
+function _clearEl(id)    { const el = document.getElementById(id); if (el) el.textContent = ''; }
 function _setEl(id, html){ const el = document.getElementById(id); if (el) el.innerHTML = html; }
-function _setErr(id, m) { const el = document.getElementById(id); if (el) el.textContent = m; }
+function _setErr(id, m)  { const el = document.getElementById(id); if (el) el.textContent = m; }
 function _setBtnLoading(btn, on) {
     if (!btn) return;
     btn.disabled = on;
@@ -685,5 +807,6 @@ function _extractErr(err) {
     return v.length ? (Array.isArray(v[0]) ? v[0][0] : String(v[0])) : 'Something went wrong';
 }
 function _esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }

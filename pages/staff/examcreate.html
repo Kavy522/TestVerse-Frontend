@@ -89,9 +89,7 @@
             <!-- Step Indicator -->
             <div class="step-indicator">
                 <div class="step active">
-                    <div class="step-circle">
-                        <i class="fas fa-info-circle"></i>
-                    </div>
+                    <div class="step-circle"><i class="fas fa-info-circle"></i></div>
                     <div class="step-body">
                         <span class="step-label">Step 1</span>
                         <span class="step-title">Basic Details</span>
@@ -99,9 +97,7 @@
                 </div>
                 <div class="step-connector"></div>
                 <div class="step pending">
-                    <div class="step-circle">
-                        <i class="fas fa-list-ol"></i>
-                    </div>
+                    <div class="step-circle"><i class="fas fa-list-ol"></i></div>
                     <div class="step-body">
                         <span class="step-label">Step 2</span>
                         <span class="step-title">Add Questions</span>
@@ -112,15 +108,13 @@
             <!-- Alert -->
             <div id="alertContainer"></div>
 
-            <!-- Form Card -->
+            <!-- Form -->
             <form id="createExamForm" novalidate>
 
                 <!-- ─ Section: Basic Info ─ -->
                 <div class="form-section">
                     <div class="form-section-header">
-                        <div class="form-section-icon">
-                            <i class="fas fa-info-circle"></i>
-                        </div>
+                        <div class="form-section-icon"><i class="fas fa-info-circle"></i></div>
                         <div>
                             <h2 class="form-section-title">Basic Information</h2>
                             <p class="form-section-desc">Name, type and description of the exam</p>
@@ -131,7 +125,8 @@
                             <div class="form-group">
                                 <label class="form-label required" for="examTitle">Exam Title</label>
                                 <input type="text" id="examTitle" name="title"
-                                    class="form-input" placeholder="e.g. Midterm Exam — Semester 4"
+                                    class="form-input"
+                                    placeholder="e.g. Data Structures Mid-Term"
                                     maxlength="200" autocomplete="off" required>
                                 <span class="form-error" id="titleErr"></span>
                             </div>
@@ -139,11 +134,10 @@
                                 <label class="form-label required" for="examType">Exam Type</label>
                                 <select id="examType" name="exam_type" class="form-select" required>
                                     <option value="" disabled selected>Select type…</option>
-                                    <option value="midterm">Midterm</option>
-                                    <option value="final">Final</option>
-                                    <option value="quiz">Quiz</option>
-                                    <option value="assignment">Assignment</option>
-                                    <option value="practice">Practice</option>
+                                    <option value="mcq">MCQ Only</option>
+                                    <option value="mixed">Mixed</option>
+                                    <option value="descriptive">Descriptive</option>
+                                    <option value="coding">Coding</option>
                                 </select>
                                 <span class="form-error" id="typeErr"></span>
                             </div>
@@ -163,7 +157,7 @@
                             </label>
                             <textarea id="examInstructions" name="instructions"
                                 class="form-textarea" rows="3"
-                                placeholder="Any special rules, allowed materials, anti-cheat notes…"
+                                placeholder="Special rules, allowed materials, anti-cheat notes…"
                                 maxlength="2000"></textarea>
                             <span class="char-count" id="instrCount">0 / 2000</span>
                         </div>
@@ -173,9 +167,7 @@
                 <!-- ─ Section: Schedule ─ -->
                 <div class="form-section">
                     <div class="form-section-header">
-                        <div class="form-section-icon">
-                            <i class="fas fa-calendar-alt"></i>
-                        </div>
+                        <div class="form-section-icon"><i class="fas fa-calendar-alt"></i></div>
                         <div>
                             <h2 class="form-section-title">Schedule</h2>
                             <p class="form-section-desc">Set when the exam starts, ends and how long students have</p>
@@ -184,24 +176,22 @@
                     <div class="form-section-body">
                         <div class="form-row form-row-2">
                             <div class="form-group">
-                                <label class="form-label required" for="startTime">Start Date & Time</label>
+                                <label class="form-label required" for="startTime">Start Date &amp; Time</label>
                                 <input type="datetime-local" id="startTime" name="start_time"
                                     class="form-input" required>
                                 <span class="form-error" id="startErr"></span>
                             </div>
                             <div class="form-group">
-                                <label class="form-label required" for="endTime">End Date & Time</label>
+                                <label class="form-label required" for="endTime">End Date &amp; Time</label>
                                 <input type="datetime-local" id="endTime" name="end_time"
                                     class="form-input" required>
                                 <span class="form-error" id="endErr"></span>
                             </div>
                         </div>
 
-                        <!-- Duration Display -->
+                        <!-- Duration pill -->
                         <div class="duration-display" id="durationDisplay">
-                            <div class="duration-icon">
-                                <i class="fas fa-hourglass-half"></i>
-                            </div>
+                            <div class="duration-icon"><i class="fas fa-hourglass-half"></i></div>
                             <div class="duration-body">
                                 <span class="duration-label">Total Duration</span>
                                 <span class="duration-value" id="durationValue">—</span>
@@ -214,9 +204,7 @@
                 <!-- ─ Section: Scoring ─ -->
                 <div class="form-section">
                     <div class="form-section-header">
-                        <div class="form-section-icon">
-                            <i class="fas fa-star"></i>
-                        </div>
+                        <div class="form-section-icon"><i class="fas fa-star"></i></div>
                         <div>
                             <h2 class="form-section-title">Scoring</h2>
                             <p class="form-section-desc">Marks and passing criteria</p>
@@ -227,13 +215,15 @@
                             <div class="form-group">
                                 <label class="form-label required" for="totalMarks">Total Marks</label>
                                 <input type="number" id="totalMarks" name="total_marks"
-                                    class="form-input" placeholder="e.g. 100" min="1" max="9999" required>
+                                    class="form-input" placeholder="e.g. 100"
+                                    min="1" max="9999" required>
                                 <span class="form-error" id="totalErr"></span>
                             </div>
                             <div class="form-group">
                                 <label class="form-label required" for="passingMarks">Passing Marks</label>
                                 <input type="number" id="passingMarks" name="passing_marks"
-                                    class="form-input" placeholder="e.g. 40" min="1" max="9999" required>
+                                    class="form-input" placeholder="e.g. 40"
+                                    min="1" max="9999" required>
                                 <span class="form-error" id="passErr"></span>
                             </div>
                             <div class="form-group">
@@ -248,7 +238,7 @@
                         <!-- Pass bar -->
                         <div class="pass-bar-wrap" id="passBarWrap" style="display:none;">
                             <div class="pass-bar-track">
-                                <div class="pass-bar-fill" id="passBarFill"></div>
+                                <div class="pass-bar-fill"   id="passBarFill"></div>
                                 <div class="pass-bar-marker" id="passBarMarker"></div>
                             </div>
                             <div class="pass-bar-labels">
@@ -263,95 +253,92 @@
                 <!-- ─ Section: Access & Visibility ─ -->
                 <div class="form-section">
                     <div class="form-section-header">
-                        <div class="form-section-icon">
-                            <i class="fas fa-lock-open"></i>
-                        </div>
+                        <div class="form-section-icon"><i class="fas fa-lock-open"></i></div>
                         <div>
-                            <h2 class="form-section-title">Access & Visibility</h2>
-                            <p class="form-section-desc">Which branches can see and attempt this exam</p>
+                            <h2 class="form-section-title">Access &amp; Visibility</h2>
+                            <p class="form-section-desc">Which departments can see and attempt this exam</p>
                         </div>
                     </div>
                     <div class="form-section-body">
                         <div class="form-row form-row-2">
+
+                            <!-- Department picker -->
                             <div class="form-group">
-                                <label class="form-label required">Allowed Branches</label>
-                                <div class="branch-picker" id="branchPicker">
+                                <label class="form-label required">Allowed Departments</label>
+                                <div class="branch-picker" id="deptPicker">
                                     <div class="branch-search-wrap">
                                         <i class="fas fa-search branch-search-icon"></i>
-                                        <input type="text" id="branchSearch"
+                                        <input type="text" id="deptSearch"
                                             class="branch-search-input"
-                                            placeholder="Search branches…" autocomplete="off">
+                                            placeholder="Search departments…"
+                                            autocomplete="off">
                                     </div>
-                                    <div class="branch-list" id="branchList">
-                                        <div class="branch-loading">
-                                            <i class="fas fa-spinner fa-spin"></i> Loading branches…
-                                        </div>
+                                    <div class="branch-list" id="deptList">
+                                        <!-- Populated by JS -->
                                     </div>
                                 </div>
-                                <span class="form-error" id="branchErr"></span>
-                                <!-- Selected chips -->
-                                <div class="selected-branches" id="selectedBranches"></div>
+                                <span class="form-error" id="deptErr"></span>
+                                <div class="selected-branches" id="selectedDepts"></div>
                             </div>
-                           <!-- REPLACE the right form-group in the Access section's form-row-2 -->
-<div class="form-group">
-    <label class="form-label" for="attemptLimit">Attempt Limit</label>
-    <select id="attemptLimit" name="max_attempts" class="form-select">
-        <option value="1">1 attempt (default)</option>
-        <option value="2">2 attempts</option>
-        <option value="3">3 attempts</option>
-        <option value="0">Unlimited</option>
-    </select>
-    <span class="form-help">How many times a student can attempt this exam</span>
 
-    <label class="form-label" style="margin-top:1.25rem;" for="resultVisibility">
-        When to Show Results
-    </label>
-    <select id="resultVisibility" name="result_visibility" class="form-select">
-        <option value="immediate">Immediately after submission</option>
-        <option value="after_end">After exam window closes</option>
-        <option value="manual">Manual release by staff</option>
-    </select>
-    <span class="form-help" id="resultVisibilityHint">
-        Students see score &amp; answers right after they submit
-    </span>
-</div>
+                            <!-- Attempt + Result Visibility -->
+                            <div class="form-group">
+                                <label class="form-label" for="attemptLimit">Attempt Limit</label>
+                                <select id="attemptLimit" name="max_attempts" class="form-select">
+                                    <option value="1">1 attempt (default)</option>
+                                    <option value="2">2 attempts</option>
+                                    <option value="3">3 attempts</option>
+                                    <option value="0">Unlimited</option>
+                                </select>
+                                <span class="form-help">How many times a student can attempt this exam</span>
 
+                                <label class="form-label" style="margin-top:1.25rem;" for="resultVisibility">
+                                    When to Show Results
+                                </label>
+                                <select id="resultVisibility" name="result_visibility" class="form-select">
+                                    <option value="immediate">Immediately after submission</option>
+                                    <option value="after_end">After exam window closes</option>
+                                    <option value="manual">Manual release by staff</option>
+                                </select>
+                                <span class="form-help" id="resultVisibilityHint">
+                                    Students see score &amp; answers right after they submit
+                                </span>
+                            </div>
                         </div>
 
-                        <!-- Options toggles -->
+                        <!-- Toggles -->
                         <div class="toggle-grid">
-    <label class="toggle-item">
-        <div class="toggle-info">
-            <span class="toggle-title">Shuffle Questions</span>
-            <span class="toggle-desc">Questions appear in random order for each student</span>
-        </div>
-        <div class="toggle-switch">
-            <input type="checkbox" id="shuffleQuestions" name="shuffle_questions">
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-        </div>
-    </label>
-    <label class="toggle-item">
-        <div class="toggle-info">
-            <span class="toggle-title">Shuffle Answer Options</span>
-            <span class="toggle-desc">MCQ choices appear in random order per student</span>
-        </div>
-        <div class="toggle-switch">
-            <input type="checkbox" id="shuffleOptions" name="shuffle_options">
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-        </div>
-    </label>
-    <label class="toggle-item">
-        <div class="toggle-info">
-            <span class="toggle-title">Allow Answer Review</span>
-            <span class="toggle-desc">Students can review their answers after the exam ends</span>
-        </div>
-        <div class="toggle-switch">
-            <input type="checkbox" id="allowReview" name="allow_review" checked>
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-        </div>
-    </label>
-</div>
-
+                            <label class="toggle-item">
+                                <div class="toggle-info">
+                                    <span class="toggle-title">Shuffle Questions</span>
+                                    <span class="toggle-desc">Questions appear in random order for each student</span>
+                                </div>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="shuffleQuestions" name="shuffle_questions">
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </div>
+                            </label>
+                            <label class="toggle-item">
+                                <div class="toggle-info">
+                                    <span class="toggle-title">Shuffle Answer Options</span>
+                                    <span class="toggle-desc">MCQ choices appear in random order per student</span>
+                                </div>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="shuffleOptions" name="shuffle_options">
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </div>
+                            </label>
+                            <label class="toggle-item">
+                                <div class="toggle-info">
+                                    <span class="toggle-title">Allow Answer Review</span>
+                                    <span class="toggle-desc">Students can review their answers after the exam ends</span>
+                                </div>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="allowReview" name="allow_review" checked>
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
 

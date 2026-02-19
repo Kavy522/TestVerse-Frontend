@@ -1,278 +1,256 @@
 /**
  * TestVerse — Staff: Create Exam
- * On submit → POST to STAFF_EXAMS → redirect to examedit.html?id=<new_id>
+ * API exam_type values: mcq | mixed | descriptive | coding
+ * Access field: allowed_departments (array of strings)
  */
 'use strict';
 
 // ── State ──────────────────────────────────────────────────────────
-let _selectedBranches = [];   // [{ id, name, code }]
-let _allBranches      = [];   // fetched from API
-let _submitting       = false;
+let _selectedDepts  = [];   // array of department name strings
+let _allDepts       = [];   // full list for search
+let _submitting     = false;
+
+// Static department list — replace with API call if backend provides one
+const DEPARTMENTS = [
+    'Computer Science',
+    'Information Technology',
+    'Electronics & Communication',
+    'Electrical Engineering',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Chemical Engineering',
+    'Biotechnology',
+    'Mathematics',
+    'Physics',
+    'Commerce',
+    'Management Studies',
+    'Arts & Humanities',
+];
 
 // ── Boot ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     if (!Auth.requireStaff()) return;
     _initUser();
     _initSidebar();
+    _initCharCounters();
     _initSchedule();
     _initScoring();
-    _initBranches();
-    _initCharCounts();
+    _initDeptPicker();
+    _initResultVisibility();
     _initForm();
 });
 
 // ── User ───────────────────────────────────────────────────────────
 function _initUser() {
-    const user   = Auth.getUser(); if (!user) return;
-    const name   = user.name || user.username || user.email?.split('@')[0] || 'Staff';
-    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`;
-    const setEl  = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    const setImg = (id, src) => { const el = document.getElementById(id); if (el) el.src = src; };
-    setEl('sidebarName', name); setEl('topbarName', name);
-    setImg('sidebarAvatar', avatar); setImg('topbarAvatar', avatar);
+    const user = Auth.getUser(); if (!user) return;
+    const name = user.name || user.username || user.email?.split('@')[0] || 'Staff';
+    const av   = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`;
+    _setText('sidebarName', name);
+    _setText('topbarName',  name);
+    _setAttr('sidebarAvatar', 'src', av);
+    _setAttr('topbarAvatar',  'src', av);
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────
 function _initSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    const open    = () => { sidebar.classList.add('open'); overlay.classList.add('show'); };
-    const close   = () => { sidebar.classList.remove('open'); overlay.classList.remove('show'); };
+    const sb  = document.getElementById('sidebar');
+    const ov  = document.getElementById('sidebarOverlay');
+    const open = () => { sb?.classList.add('open');    ov?.classList.add('show'); };
+    const close= () => { sb?.classList.remove('open'); ov?.classList.remove('show'); };
     document.getElementById('menuToggle')?.addEventListener('click', open);
     document.getElementById('sidebarClose')?.addEventListener('click', close);
-    overlay?.addEventListener('click', close);
+    ov?.addEventListener('click', close);
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
         if (confirm('Logout from TestVerse?')) Auth.logout();
     });
 }
 
-// ── Char Counts ────────────────────────────────────────────────────
-function _initCharCounts() {
-    _bindCharCount('examDescription', 'descCount', 1000);
-    _bindCharCount('examInstructions', 'instrCount', 2000);
+// ── Char Counters ──────────────────────────────────────────────────
+function _initCharCounters() {
+    _bindCounter('examDescription', 'descCount',  1000);
+    _bindCounter('examInstructions', 'instrCount', 2000);
 }
-function _bindCharCount(inputId, countId, max) {
-    const el = document.getElementById(inputId);
+function _bindCounter(fieldId, countId, max) {
+    const ta = document.getElementById(fieldId);
     const ct = document.getElementById(countId);
-    if (!el || !ct) return;
+    if (!ta || !ct) return;
     const update = () => {
-        const len = el.value.length;
+        const len = ta.value.length;
         ct.textContent = `${len} / ${max}`;
-        ct.classList.toggle('warn', len >= max * 0.85 && len < max);
-        ct.classList.toggle('over', len >= max);
+        ct.className   = 'char-count' + (len > max * 0.9 ? ' warn' : '') + (len > max ? ' over' : '');
     };
-    el.addEventListener('input', update);
+    ta.addEventListener('input', update);
     update();
 }
 
-// ── Schedule — Duration Auto-calc ─────────────────────────────────
+// ── Schedule — auto duration ───────────────────────────────────────
 function _initSchedule() {
-    const startEl = document.getElementById('startTime');
-    const endEl   = document.getElementById('endTime');
+    const start = document.getElementById('startTime');
+    const end   = document.getElementById('endTime');
 
-    // Set min to now (round up to next minute)
-    const nowStr = _toDateTimeLocal(new Date(Date.now() + 60000));
-    if (startEl) startEl.min = nowStr;
+    // Set min to now (rounded to next 5 min)
+    const now = new Date();
+    now.setMinutes(Math.ceil(now.getMinutes() / 5) * 5, 0, 0);
+    const iso = _toDatetimeLocal(now);
+    if (start) start.min = iso;
 
-    startEl?.addEventListener('change', () => {
-        // End must be after start
-        if (endEl && startEl.value) endEl.min = startEl.value;
-        _calcDuration();
+    const calc = () => {
+        const s = start?.value, e = end?.value;
+        const disp  = document.getElementById('durationDisplay');
+        const val   = document.getElementById('durationValue');
+        const break_= document.getElementById('durationBreakdown');
+
         _clearErr('startErr');
-    });
-    endEl?.addEventListener('change', () => { _calcDuration(); _clearErr('endErr'); });
-    _calcDuration();
-}
+        _clearErr('endErr');
 
-function _calcDuration() {
-    const s = document.getElementById('startTime')?.value;
-    const e = document.getElementById('endTime')?.value;
-    const disp = document.getElementById('durationDisplay');
-    const val  = document.getElementById('durationValue');
-    const bkd  = document.getElementById('durationBreakdown');
-    if (!disp || !val) return;
-
-    if (!s || !e) {
-        val.textContent = '—';
-        disp.classList.remove('valid', 'invalid');
-        if (bkd) bkd.textContent = '';
-        return;
-    }
-
-    const diffMs = new Date(e) - new Date(s);
-    if (diffMs <= 0) {
-        val.textContent = 'Invalid range';
-        disp.classList.add('invalid'); disp.classList.remove('valid');
-        if (bkd) bkd.innerHTML = '<i class="fas fa-exclamation-circle"></i> End must be after start';
-        return;
-    }
-
-    const totalMins = Math.floor(diffMs / 60000);
-    const h = Math.floor(totalMins / 60);
-    const m = totalMins % 60;
-
-    val.textContent = h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''}`.trim() : `${m} min`;
-    disp.classList.add('valid'); disp.classList.remove('invalid');
-
-    // Breakdown
-    const days = Math.floor(h / 24), rh = h % 24;
-    let bkStr = '';
-    if (days)    bkStr += `${days}d `;
-    if (rh)      bkStr += `${rh}h `;
-    if (m)       bkStr += `${m}m `;
-    if (bkd) bkd.innerHTML = `<i class="fas fa-clock"></i> ${totalMins} minutes total`;
-}
-
-// ── Scoring — Pass % + Bar ─────────────────────────────────────────
-function _initScoring() {
-    document.getElementById('totalMarks')?.addEventListener('input',   _calcScoring);
-    document.getElementById('passingMarks')?.addEventListener('input', _calcScoring);
-}
-function _calcScoring() {
-    const total = parseFloat(document.getElementById('totalMarks')?.value) || 0;
-    const pass  = parseFloat(document.getElementById('passingMarks')?.value) || 0;
-    const pctEl = document.getElementById('passPercent');
-    const wrap  = document.getElementById('passBarWrap');
-    const fill  = document.getElementById('passBarFill');
-    const mark  = document.getElementById('passBarMarker');
-    const passL = document.getElementById('passBarPassLabel');
-    const totL  = document.getElementById('totalMarksLabel');
-
-    if (!total || !pass) {
-        if (pctEl) pctEl.textContent = '—';
-        if (wrap)  wrap.style.display = 'none';
-        return;
-    }
-
-    const pct = Math.min(100, Math.round((pass / total) * 100 * 10) / 10);
-    if (pctEl) pctEl.textContent = pct;
-    if (wrap)  wrap.style.display = 'block';
-
-    const fillW = Math.min(100, (pass / total) * 100);
-    if (fill)  fill.style.width  = `${fillW}%`;
-    if (mark)  mark.style.left   = `calc(${fillW}% - 2px)`;
-    if (passL) passL.textContent = pass;
-    if (totL)  totL.textContent  = total;
-
-    // Validation feedback
-    if (pass > total) {
-        _setErr('passErr', 'Cannot exceed total marks');
-    } else {
-        _clearErr('passErr');
-    }
-}
-
-// ── Branches ───────────────────────────────────────────────────────
-async function _initBranches() {
-    try {
-        // Try your staff branches endpoint; fallback to students endpoint for branch list
-        const ep = CONFIG.ENDPOINTS.STAFF_BRANCHES || '/api/v1/auth/staff/branches/';
-        const res = await Api.get(ep);
-        const { data, error } = await Api.parse(res);
-
-        if (error || !data) {
-            // Fallback: use a hardcoded set until backend provides endpoint
-            _allBranches = _defaultBranches();
-        } else {
-            _allBranches = Array.isArray(data) ? data : (data.results || data.branches || []);
+        if (!s || !e) {
+            if (val) val.textContent = '—';
+            disp?.classList.remove('valid','invalid');
+            return;
         }
-    } catch {
-        _allBranches = _defaultBranches();
-    }
-    _renderBranchList(_allBranches);
-    _initBranchSearch();
+
+        const diff = Math.floor((new Date(e) - new Date(s)) / 60000);
+
+        if (diff <= 0) {
+            if (val) val.textContent = 'Invalid range';
+            disp?.classList.add('invalid');
+            disp?.classList.remove('valid');
+            _setErr('endErr', 'End time must be after start time');
+            return;
+        }
+
+        const h = Math.floor(diff / 60);
+        const m = diff % 60;
+        if (val) val.textContent = h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''}`.trim() : `${m} min`;
+        if (break_) {
+            break_.innerHTML = h > 0
+                ? `<i class="fas fa-clock"></i> ${diff} minutes total`
+                : `<i class="fas fa-clock"></i> ${m} minutes`;
+        }
+        disp?.classList.add('valid');
+        disp?.classList.remove('invalid');
+
+        // Update end min
+        if (end) end.min = start.value;
+    };
+
+    start?.addEventListener('change', calc);
+    end?.addEventListener('change', calc);
 }
 
-function _defaultBranches() {
-    return [
-        { id: 'CE',  name: 'Computer Engineering',          code: 'CE'  },
-        { id: 'IT',  name: 'Information Technology',        code: 'IT'  },
-        { id: 'EC',  name: 'Electronics & Communication',   code: 'EC'  },
-        { id: 'ME',  name: 'Mechanical Engineering',        code: 'ME'  },
-        { id: 'CV',  name: 'Civil Engineering',             code: 'CV'  },
-        { id: 'EE',  name: 'Electrical Engineering',        code: 'EE'  },
-        { id: 'CH',  name: 'Chemical Engineering',          code: 'CH'  },
-        { id: 'BCA', name: 'Bachelor of Computer Apps',     code: 'BCA' },
-        { id: 'MCA', name: 'Master of Computer Apps',       code: 'MCA' },
-    ];
+// ── Scoring — pass percentage & bar ───────────────────────────────
+function _initScoring() {
+    const total  = document.getElementById('totalMarks');
+    const pass   = document.getElementById('passingMarks');
+    const pct    = document.getElementById('passPercent');
+    const wrap   = document.getElementById('passBarWrap');
+    const fill   = document.getElementById('passBarFill');
+    const marker = document.getElementById('passBarMarker');
+    const plbl   = document.getElementById('passBarPassLabel');
+    const tlbl   = document.getElementById('totalMarksLabel');
+
+    const calc = () => {
+        const t = parseFloat(total?.value);
+        const p = parseFloat(pass?.value);
+
+        _clearErr('passErr');
+        _clearErr('totalErr');
+
+        if (isNaN(t) || isNaN(p)) {
+            if (pct) pct.textContent = '—';
+            if (wrap) wrap.style.display = 'none';
+            return;
+        }
+
+        if (p > t) {
+            _setErr('passErr', 'Passing marks cannot exceed total marks');
+            if (pct) pct.textContent = '—';
+            if (wrap) wrap.style.display = 'none';
+            return;
+        }
+
+        const percent = ((p / t) * 100).toFixed(1);
+        if (pct) pct.textContent = percent;
+
+        if (wrap) {
+            wrap.style.display = 'block';
+            const pctNum = parseFloat(percent);
+            fill.style.width      = `${pctNum}%`;
+            marker.style.left     = `${pctNum}%`;
+            if (plbl) plbl.textContent = p;
+            if (tlbl) tlbl.textContent = t;
+        }
+    };
+
+    total?.addEventListener('input', calc);
+    pass?.addEventListener('input', calc);
 }
 
-function _renderBranchList(branches) {
-    const list = document.getElementById('branchList'); if (!list) return;
-    if (!branches.length) {
-        list.innerHTML = '<div class="branch-empty">No branches found</div>';
+// ── Department Picker ──────────────────────────────────────────────
+function _initDeptPicker() {
+    _allDepts = [...DEPARTMENTS];
+    _renderDeptList(_allDepts);
+
+    document.getElementById('deptSearch')?.addEventListener('input', e => {
+        const q = e.target.value.trim().toLowerCase();
+        _renderDeptList(q ? _allDepts.filter(d => d.toLowerCase().includes(q)) : _allDepts);
+    });
+}
+
+function _renderDeptList(list) {
+    const container = document.getElementById('deptList');
+    if (!container) return;
+
+    if (!list.length) {
+        container.innerHTML = `<div class="branch-loading">No departments found</div>`;
         return;
     }
-    list.innerHTML = branches.map(b => {
-        const sel = _selectedBranches.some(s => s.id === b.id);
-        return `
-        <div class="branch-item ${sel ? 'selected' : ''}" data-id="${b.id}" data-name="${_esc(b.name)}" data-code="${_esc(b.code || b.id)}">
-            <div class="branch-check"></div>
-            <span class="branch-name">${_esc(b.name)}</span>
-            <span class="branch-code">${_esc(b.code || b.id)}</span>
+
+    container.innerHTML = list.map(dept => {
+        const selected = _selectedDepts.includes(dept);
+        return `<div class="branch-item ${selected ? 'selected' : ''}" data-dept="${_esc(dept)}">
+            <div class="branch-checkbox">
+                <i class="fas fa-${selected ? 'check-square' : 'square'}"></i>
+            </div>
+            <span>${_esc(dept)}</span>
+            ${selected ? '<i class="fas fa-check branch-check-mark"></i>' : ''}
         </div>`;
     }).join('');
-    list.querySelectorAll('.branch-item').forEach(item => {
-        item.addEventListener('click', () => _toggleBranch(item));
+
+    container.querySelectorAll('.branch-item').forEach(item => {
+        item.addEventListener('click', () => _toggleDept(item.dataset.dept));
     });
 }
 
-function _initBranchSearch() {
-    document.getElementById('branchSearch')?.addEventListener('input', e => {
-        const q = e.target.value.toLowerCase();
-        const filtered = _allBranches.filter(b =>
-            b.name.toLowerCase().includes(q) || (b.code || '').toLowerCase().includes(q));
-        _renderBranchList(filtered);
-    });
-}
-
-function _toggleBranch(item) {
-    const id   = item.dataset.id;
-    const name = item.dataset.name;
-    const code = item.dataset.code;
-    const idx  = _selectedBranches.findIndex(s => s.id === id);
-    if (idx === -1) {
-        _selectedBranches.push({ id, name, code });
+function _toggleDept(dept) {
+    if (_selectedDepts.includes(dept)) {
+        _selectedDepts = _selectedDepts.filter(d => d !== dept);
     } else {
-        _selectedBranches.splice(idx, 1);
+        _selectedDepts.push(dept);
     }
-    item.classList.toggle('selected', idx === -1);
-    _renderChips();
-    _clearErr('branchErr');
+    // Re-render list with current search
+    const q = document.getElementById('deptSearch')?.value.trim().toLowerCase() || '';
+    _renderDeptList(q ? _allDepts.filter(d => d.toLowerCase().includes(q)) : _allDepts);
+    _renderSelectedChips();
+    _clearErr('deptErr');
 }
 
-function _renderChips() {
-    const wrap = document.getElementById('selectedBranches'); if (!wrap) return;
-    if (!_selectedBranches.length) { wrap.innerHTML = ''; return; }
-    wrap.innerHTML = _selectedBranches.map(b => `
-        <span class="branch-chip" data-id="${b.id}">
-            ${_esc(b.name)}
-            <button class="branch-chip-remove" type="button" title="Remove"><i class="fas fa-times"></i></button>
-        </span>`).join('');
-    wrap.querySelectorAll('.branch-chip').forEach(chip => {
-        chip.querySelector('.branch-chip-remove').addEventListener('click', () => {
-            const id = chip.dataset.id;
-            _selectedBranches = _selectedBranches.filter(s => s.id !== id);
-            _renderChips();
-            // deselect in list
-            const li = document.querySelector(`.branch-item[data-id="${id}"]`);
-            if (li) li.classList.remove('selected');
-        });
+function _renderSelectedChips() {
+    const wrap = document.getElementById('selectedDepts');
+    if (!wrap) return;
+    wrap.innerHTML = _selectedDepts.map(d => `
+        <div class="selected-chip">
+            <span>${_esc(d)}</span>
+            <button type="button" class="chip-remove" data-dept="${_esc(d)}">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>`).join('');
+    wrap.querySelectorAll('.chip-remove').forEach(btn => {
+        btn.addEventListener('click', () => _toggleDept(btn.dataset.dept));
     });
 }
 
-// ── Form Init ──────────────────────────────────────────────────────
-function _initForm() {
-    document.getElementById('createExamForm')?.addEventListener('submit', e => {
-        e.preventDefault(); _submit(false);
-    });
-    document.getElementById('saveDraftBtn')?.addEventListener('click', () => {
-        _submit(true);
-    });
-    // ← ADD THIS: live hint under result visibility
-    _initResultVisibility();
-}
-
+// ── Result Visibility hint ─────────────────────────────────────────
 function _initResultVisibility() {
     const sel  = document.getElementById('resultVisibility');
     const hint = document.getElementById('resultVisibilityHint');
@@ -282,61 +260,63 @@ function _initResultVisibility() {
         after_end: 'Results become visible once the exam window closes',
         manual:    'You control exactly when results are released to students',
     };
-    sel.addEventListener('change', () => {
-        hint.textContent = hints[sel.value] || '';
-    });
+    sel.addEventListener('change', () => { hint.textContent = hints[sel.value] || ''; });
 }
 
-// ── Validate ───────────────────────────────────────────────────────
-function _validate(asDraft) {
-    let ok = true;
-    const title = document.getElementById('examTitle')?.value.trim();
-    const type  = document.getElementById('examType')?.value;
-    const desc  = document.getElementById('examDescription')?.value.trim();
-    const start = document.getElementById('startTime')?.value;
-    const end   = document.getElementById('endTime')?.value;
-    const total = parseFloat(document.getElementById('totalMarks')?.value);
-    const pass  = parseFloat(document.getElementById('passingMarks')?.value);
+// ── Form Submit ────────────────────────────────────────────────────
+function _initForm() {
+    document.getElementById('createExamForm')?.addEventListener('submit', e => {
+        e.preventDefault();
+        _submit(false);
+    });
+    document.getElementById('saveDraftBtn')?.addEventListener('click', () => _submit(true));
+}
 
+function _validate() {
+    let ok = true;
+
+    const title = document.getElementById('examTitle')?.value.trim();
     if (!title) { _setErr('titleErr', 'Title is required'); ok = false; }
     else _clearErr('titleErr');
 
+    const type = document.getElementById('examType')?.value;
     if (!type) { _setErr('typeErr', 'Select an exam type'); ok = false; }
     else _clearErr('typeErr');
 
+    const desc = document.getElementById('examDescription')?.value.trim();
     if (!desc) { _setErr('descErr', 'Description is required'); ok = false; }
     else _clearErr('descErr');
 
+    const start = document.getElementById('startTime')?.value;
+    const end   = document.getElementById('endTime')?.value;
     if (!start) { _setErr('startErr', 'Start time is required'); ok = false; }
     else _clearErr('startErr');
-
     if (!end) { _setErr('endErr', 'End time is required'); ok = false; }
-    else if (start && new Date(end) <= new Date(start)) {
+    else _clearErr('endErr');
+    if (start && end && new Date(end) <= new Date(start)) {
         _setErr('endErr', 'End time must be after start time'); ok = false;
-    } else _clearErr('endErr');
+    }
 
-    if (!total || total < 1) { _setErr('totalErr', 'Enter valid total marks'); ok = false; }
+    const total  = parseFloat(document.getElementById('totalMarks')?.value);
+    const pass   = parseFloat(document.getElementById('passingMarks')?.value);
+    if (!total || total <= 0) { _setErr('totalErr', 'Enter valid total marks'); ok = false; }
     else _clearErr('totalErr');
-
-    if (!pass || pass < 1) { _setErr('passErr', 'Enter valid passing marks'); ok = false; }
-    else if (total && pass > total) { _setErr('passErr', 'Cannot exceed total marks'); ok = false; }
+    if (!pass  || pass  <= 0) { _setErr('passErr',  'Enter valid passing marks'); ok = false; }
     else _clearErr('passErr');
+    if (total && pass && pass > total) {
+        _setErr('passErr', 'Passing marks cannot exceed total marks'); ok = false;
+    }
 
-    if (!asDraft && !_selectedBranches.length) {
-        _setErr('branchErr', 'Select at least one branch'); ok = false;
-    } else _clearErr('branchErr');
+    if (_selectedDepts.length === 0) {
+        _setErr('deptErr', 'Select at least one department'); ok = false;
+    } else _clearErr('deptErr');
 
     return ok;
 }
 
-// ── Submit ─────────────────────────────────────────────────────────
 async function _submit(asDraft) {
     if (_submitting) return;
-    if (!_validate(asDraft)) {
-        // Scroll to first error
-        document.querySelector('.form-error:not(:empty)')?.closest('.form-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-    }
+    if (!_validate()) return;
 
     _submitting = true;
     const btn = asDraft
@@ -346,26 +326,27 @@ async function _submit(asDraft) {
 
     const start = document.getElementById('startTime').value;
     const end   = document.getElementById('endTime').value;
-    const durationMins = Math.floor((new Date(end) - new Date(start)) / 60000);
+    const duration = Math.floor((new Date(end) - new Date(start)) / 60000);
 
     const payload = {
         title:               document.getElementById('examTitle').value.trim(),
-        exam_type:           document.getElementById('examType').value,
         description:         document.getElementById('examDescription').value.trim(),
-        instructions:        document.getElementById('examInstructions').value.trim(),
+        exam_type:           document.getElementById('examType').value,
+        instructions:        document.getElementById('examInstructions').value.trim() || '',
         start_time:          new Date(start).toISOString(),
         end_time:            new Date(end).toISOString(),
-        duration:            durationMins,
+        duration,
         total_marks:         String(document.getElementById('totalMarks').value),
         passing_marks:       String(document.getElementById('passingMarks').value),
-        allowed_branches:    _selectedBranches.map(b => b.id),
-        max_attempts:        parseInt(document.getElementById('attemptLimit').value) || 1,
+        allowed_departments: _selectedDepts,
+        is_published:        false,
+        // Derived from result_visibility
+        show_score:          document.getElementById('resultVisibility').value === 'immediate',
         result_visibility:   document.getElementById('resultVisibility').value,
+        max_attempts:        parseInt(document.getElementById('attemptLimit').value) || 1,
         shuffle_questions:   document.getElementById('shuffleQuestions').checked,
         shuffle_options:     document.getElementById('shuffleOptions').checked,
-        show_score: document.getElementById('resultVisibility').value === 'immediate',
         allow_review:        document.getElementById('allowReview').checked,
-        is_published:        false,   // always starts as draft
     };
 
     try {
@@ -373,64 +354,64 @@ async function _submit(asDraft) {
         const { data, error } = await Api.parse(res);
 
         if (error) {
-            _showAlert(typeof error === 'string' ? error : _extractErr(error), 'error');
+            _showAlert(_extractErr(error), 'error');
             _setBtnLoading(btn, false);
             _submitting = false;
             return;
         }
 
-        const examId = data?.id || data?.exam_id;
+        const examId = data?.id;
 
         if (asDraft) {
-            // Just saved as draft — go back to exams list
-            window.location.href = `exams.html?created=draft&title=${encodeURIComponent(payload.title)}`;
+            _showAlert('Exam saved as draft!', 'success');
+            setTimeout(() => { window.location.href = `exams.html`; }, 1200);
         } else {
-            // Continue to question editor
+            // Redirect to question editor with ?new=1 so welcome banner shows
             window.location.href = `examedit.html?id=${examId}&new=1`;
         }
 
-    } catch (err) {
-        console.error(err);
-        _showAlert('Network error. Please check your connection.', 'error');
+    } catch {
+        _showAlert('Network error. Please check your connection and try again.', 'error');
         _setBtnLoading(btn, false);
         _submitting = false;
     }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
-function _setErr(id, msg)   { const el = document.getElementById(id); if (el) el.textContent = msg; }
-function _clearErr(id)      { const el = document.getElementById(id); if (el) el.textContent = ''; }
-
-function _showAlert(msg, type) {
-    const wrap = document.getElementById('alertContainer'); if (!wrap) return;
-    wrap.innerHTML = `
-        <div class="alert alert-${type}">
-            <i class="fas fa-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i>
-            <span>${msg}</span>
-        </div>`;
-    wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+function _toDatetimeLocal(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-
+function _setText(id, v)       { const el = document.getElementById(id); if (el) el.textContent = v; }
+function _setAttr(id, a, v)    { const el = document.getElementById(id); if (el) el[a] = v; }
+function _setErr(id, msg)      { const el = document.getElementById(id); if (el) el.textContent = msg; }
+function _clearErr(id)         { const el = document.getElementById(id); if (el) el.textContent = ''; }
+function _esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 function _setBtnLoading(btn, on) {
     if (!btn) return;
     btn.disabled = on;
     btn.querySelector('.btn-text')?.classList.toggle('hidden', on);
-    const loader = btn.querySelector('.btn-loader');
-    if (loader) { loader.classList.toggle('hidden', !on); if (on) loader.style.display = 'inline-flex'; }
+    const l = btn.querySelector('.btn-loader');
+    if (l) l.classList.toggle('hidden', !on);
 }
-
 function _extractErr(err) {
+    if (!err) return 'Something went wrong';
     if (typeof err === 'string') return err;
     const vals = Object.values(err);
-    if (vals.length) return Array.isArray(vals[0]) ? vals[0][0] : String(vals[0]);
-    return 'Something went wrong';
+    if (!vals.length) return 'Something went wrong';
+    const first = vals[0];
+    return Array.isArray(first) ? first[0] : String(first);
 }
-
-function _toDateTimeLocal(d) {
-    const p = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-function _esc(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+function _showAlert(msg, type) {
+    const wrap = document.getElementById('alertContainer'); if (!wrap) return;
+    const icon = type === 'error' ? 'exclamation-circle' : 'check-circle';
+    wrap.innerHTML = `<div class="alert alert-${type}">
+        <i class="fas fa-${icon}"></i><span>${msg}</span>
+    </div>`;
+    if (type === 'success') {
+        setTimeout(() => { wrap.innerHTML = ''; }, 3000);
+    }
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
