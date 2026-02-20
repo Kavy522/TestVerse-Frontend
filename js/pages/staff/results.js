@@ -415,6 +415,15 @@ async function _openGradeDrawer(resultId, attemptId) {
     _setText('gradeStudentEmail', s.email || '—');
     _setText('gradeScoreCurrent', result ? (parseFloat(result.obtained_marks || 0)) : '—');
     _setText('gradeScoreTotal',   result ? (parseFloat(result.total_marks || _selectedExam?.total_marks || 100)) : '—');
+    
+    // Reset auto-grade button text
+    const autoGradeBtn = document.getElementById('autoGradeMcqBtn');
+    if (autoGradeBtn) {
+        const btnText = autoGradeBtn.querySelector('.btn-text');
+        if (btnText) {
+            btnText.innerHTML = '<i class="fas fa-magic"></i> Auto Grade MCQs';
+        }
+    }
 
     try {
         const res = await Api.get(CONFIG.ENDPOINTS.STAFF_RESULTS_ANSWERS(resultId));
@@ -607,12 +616,12 @@ function _buildAnswerCard(ans, num) {
 
 // ── Auto Grade All MCQs ──────────────────────────────────────────────
 async function _autoGradeAllMcqs() {
-    if (!_selectedExam) return;
+    if (!_selectedExam || !_currentResultId) return;
     
     const btn = document.getElementById('autoGradeMcqBtn');
     if (!btn) return;
     
-    if (!confirm('This will auto-grade all MCQ questions for ALL students in this exam. Continue?')) {
+    if (!confirm('This will auto-grade all MCQ questions for the current student. Continue?')) {
         return;
     }
     
@@ -620,54 +629,80 @@ async function _autoGradeAllMcqs() {
     _clearEl('gradeDrawerAlert');
     
     try {
-        // Call backend to auto-grade all MCQs for all students in this exam
-        const res = await Api.post(
-            CONFIG.ENDPOINTS.STAFF_EXAM_AUTO_GRADE_MCQ(_selectedExam.id),
-            {}
-        );
-        const { data, error } = await Api.parse(res);
+        // Get the current student's answers
+        let answers = [..._answers];
         
-        if (error) {
-            _setHTML('gradeDrawerAlert', _alertHtml(
-                `Auto-grading failed: ${_extractErr(error)}`,
-                'error'
-            ));
-            _setBtnLoading(btn, false);
-            return;
-        }
+        // Calculate scores for MCQ questions only
+        let mcqCount = 0;
+        let correctCount = 0;
         
-        // Refresh current student's answers if drawer is open
-        if (_currentResultId) {
-            try {
-                const refreshRes = await Api.get(CONFIG.ENDPOINTS.STAFF_RESULTS_ANSWERS(_currentResultId));
-                const { data: refreshData, error: refreshErr } = await Api.parse(refreshRes);
-                if (!refreshErr && refreshData) {
-                    _answers = refreshData.answers ?? refreshData ?? [];
-                    _renderAnswers(_answers);
+        for (let i = 0; i < answers.length; i++) {
+            const answer = answers[i];
+            const qType = _normQType(answer);
+            
+            // Only process MCQ and multiple choice questions
+            if (qType === 'mcq' || qType === 'multiple_mcq') {
+                mcqCount++;
+                
+                // Get the correct answer from the question
+                const question = answer.question || {};
+                let correctAnswer = question.correct_option || question.correct_answer || [];
+                
+                // Normalize correct answer for comparison
+                if (typeof correctAnswer === 'string') {
+                    correctAnswer = [correctAnswer];
+                } else if (!Array.isArray(correctAnswer)) {
+                    correctAnswer = [];
                 }
-            } catch {
-                // Ignore refresh errors
+                
+                // Get student's answer
+                let studentAnswer = _getStudentAnswer(answer);
+                if (typeof studentAnswer === 'string') {
+                    studentAnswer = [studentAnswer];
+                } else if (!Array.isArray(studentAnswer)) {
+                    studentAnswer = [];
+                }
+                
+                // Compare answers
+                const isCorrect = _arraysEqual(correctAnswer.sort(), studentAnswer.sort());
+                
+                if (isCorrect) {
+                    correctCount++;
+                }
+                
+                // Update the answer object with scoring info
+                answers[i] = {
+                    ...answer,
+                    is_correct: isCorrect,
+                    marks_obtained: isCorrect ? (question.points || question.marks || 0) : 0,
+                    score: isCorrect ? (question.points || question.marks || 0) : 0
+                };
             }
         }
         
-        // Refresh results list to show updated grading status
-        if (_selectedExam) {
-            await _loadResults(_selectedExam.id);
-        }
+        // Update the display with the calculated scores
+        _answers = answers;
+        _renderAnswers(answers);
         
         _setHTML('gradeDrawerAlert', _alertHtml(
-            'All MCQ answers for all students have been auto-graded successfully!',
+            `Auto-graded ${correctCount}/${mcqCount} MCQ questions for current student.`,
             'success'
         ));
         
     } catch (err) {
         console.error('[results] autoGradeMcq:', err);
         _setHTML('gradeDrawerAlert', _alertHtml(
-            'Network error. Could not auto-grade MCQs.',
+            'Error during auto-grading: ' + err.message,
             'error'
         ));
     } finally {
         _setBtnLoading(btn, false);
+        
+        // Update button text after grading
+        const btnText = btn.querySelector('.btn-text');
+        if (btnText) {
+            btnText.innerHTML = '<i class="fas fa-magic"></i> Re-Auto Grade MCQs';
+        }
     }
 }
 
@@ -731,7 +766,7 @@ async function _saveAllGrades() {
     for (const payload of toSave) {
         try {
             const res = await Api.post(
-                CONFIG.ENDPOINTS.STAFF_SUBMISSIONS_EVALUATE(_currentAttemptId),
+                CONFIG.ENDPOINTS.STAFF_EXAM_QUESTION_EVALUATE(_selectedExam.id, payload.question_id),
                 payload
             );
             const { error } = await Api.parse(res);
@@ -854,7 +889,7 @@ function _getQuestionText(ans) {
 function _getStudentAnswer(ans) {
     if (!ans) return null;
     
-    // Try various field names
+    // Try various field names for the answer value
     let val = ans.student_answer
         ?? ans.your_answer
         ?? ans.submitted_answer
@@ -863,24 +898,42 @@ function _getStudentAnswer(ans) {
         ?? ans.selected_option
         ?? ans.selected_options;
     
-    // If it's an object, extract meaningful values
-    if (val && typeof val === 'object' && !Array.isArray(val)) {
-        // For coding questions, prefer code field
-        if (val.code) return val;
-        // For MCQ, try value or text fields
-        if (val.value != null) return val.value;
-        if (val.text != null) return val.text;
-        if (val.id != null) return val.id;
-        // If object has a single meaningful property, use it
-        const keys = Object.keys(val);
-        if (keys.length === 1 && keys[0] !== 'id') {
-            return val[keys[0]];
+    // Handle different question types according to API response format
+    if (ans.question_type === 'mcq' || ans.question_type === 'multiple_mcq') {
+        // For MCQ, the answer field might contain option IDs or indices
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+            // If it's an object like {"1": true}, extract the keys
+            if (Object.keys(val).length > 0) {
+                const keys = Object.keys(val);
+                if (keys.length === 1 && val[keys[0]]) {
+                    return keys[0];
+                }
+                return val;
+            }
         }
-        // Last resort: try to stringify if it's a simple object
-        return JSON.stringify(val);
+        // Return as-is for MCQ (could be string ID or array of IDs)
+        return val;
+    } else if (ans.question_type === 'coding') {
+        // For coding questions, the answer field might contain code directly
+        // or be an object with code field
+        if (typeof val === 'object' && val.code) {
+            return val.code;
+        }
+        if (typeof val === 'string') {
+            return val;
+        }
+        // If it's an object with other fields, return as object
+        return val || ans.code || '';
+    } else {
+        // For descriptive, short_answer, long_answer
+        if (typeof val === 'object' && val.text) {
+            return val.text;
+        }
+        if (typeof val === 'object' && val.answer) {
+            return val.answer;
+        }
+        return val || '';
     }
-    
-    return val;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -933,4 +986,10 @@ function _esc(s) {
     return String(s ?? '')
         .replace(/&/g,'&amp;').replace(/</g,'&lt;')
         .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function _arraysEqual(a, b) {
+    return Array.isArray(a) && Array.isArray(b) &&
+        a.length === b.length &&
+        a.every((val, index) => val === b[index]);
 }

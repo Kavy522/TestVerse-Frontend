@@ -722,7 +722,8 @@ async function _saveToServer(silent = true) {
     if (!_examId || !_attemptId || _isSubmitting) return;
     _setSaveStatus('saving', 'Saving…');
     try {
-        const payload = _buildSubmitPayload();
+        // For intermediate saves, we don't want to mark as final submission
+        const payload = _buildSubmitPayload(false); // Always false for intermediate saves
         const res = await Api.post(CONFIG.ENDPOINTS.EXAM_SAVE(_examId), payload);
         const { error } = await Api.parse(res);
         if (error) {
@@ -853,9 +854,31 @@ function _autoSubmit() {
 function _buildSubmitPayload(isFinal = false) {
     const answers = _questions.map(q => {
         const a = _answers[q.id];
+        
+        // Format answer based on question type according to API requirements
+        let formattedAnswer;
+        
+        if (q.question_type === 'mcq') {
+            // For MCQ, send the selected option ID
+            formattedAnswer = a;
+        } else if (q.question_type === 'multiple_choice') {
+            // For multiple choice, send array of selected option IDs
+            formattedAnswer = Array.isArray(a) ? a : (a != null ? [a] : []);
+        } else if (q.question_type === 'coding') {
+            // For coding, send the code and language
+            if (typeof a === 'object' && a.code) {
+                formattedAnswer = a.code;
+            } else {
+                formattedAnswer = a || '';
+            }
+        } else {
+            // For descriptive, short_answer, long_answer, send the text
+            formattedAnswer = a || '';
+        }
+        
         return {
             question_id: q.id,
-            answer:      a ?? null,
+            answer:      formattedAnswer,
         };
     });
     return {

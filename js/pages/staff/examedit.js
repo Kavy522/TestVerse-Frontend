@@ -310,6 +310,9 @@ function _openDrawerAdd() {
     _set('drawerSubtitle', `Exam: ${_exam?.title || ''}`);
     const icon = document.getElementById('drawerIcon');
     if (icon) icon.innerHTML = '<i class="fas fa-plus"></i>';
+    // Ensure any previous loading states are cleared
+    _setBtnLoading(document.getElementById('drawerSaveBtn'), false);
+    _setBtnLoading(document.getElementById('drawerSaveAddBtn'), false);
     _openDrawer();
 }
 
@@ -324,6 +327,9 @@ function _openDrawerEdit(qId) {
     const icon = document.getElementById('drawerIcon');
     if (icon) icon.innerHTML = '<i class="fas fa-edit"></i>';
     _populateDrawer(q);
+    // Ensure any previous loading states are cleared
+    _setBtnLoading(document.getElementById('drawerSaveBtn'), false);
+    _setBtnLoading(document.getElementById('drawerSaveAddBtn'), false);
     _openDrawer();
 }
 
@@ -339,6 +345,10 @@ function _closeDrawer() {
     document.getElementById('drawerBackdrop').classList.remove('show');
     document.body.style.overflow = '';
     _saving = false;
+    
+    // Reset button loading states
+    _setBtnLoading(document.getElementById('drawerSaveBtn'), false);
+    _setBtnLoading(document.getElementById('drawerSaveAddBtn'), false);
 }
 
 // ── Reset Drawer ───────────────────────────────────────────────────
@@ -362,6 +372,10 @@ function _resetDrawer() {
 
     // ✅ FIX: error element id is qPointsErr
     ['qTextErr', 'qOptionsErr', 'qCorrectErr', 'qTfErr', 'qPointsErr'].forEach(_clearEl);
+    
+    // Reset button loading states
+    _setBtnLoading(document.getElementById('drawerSaveBtn'), false);
+    _setBtnLoading(document.getElementById('drawerSaveAddBtn'), false);
 }
 
 // ── Populate Drawer for Edit ───────────────────────────────────────
@@ -637,6 +651,15 @@ function _buildPayload() {
             .map(r => r.querySelector('.option-input').value.trim())
             .filter(Boolean)
             .map((t, i) => ({ text: t, is_correct: correctIdxs.includes(i) }));
+        
+        // Store correct option(s) separately for auto-grading purposes
+        if (type === 'mcq' && correctIdxs.length === 1) {
+            // For single choice MCQ, store the single correct option index as ID
+            payload.correct_option = correctIdxs[0].toString(); // Store as string ID
+        } else if (type === 'multiple_mcq' && correctIdxs.length > 0) {
+            // For multiple choice MCQ, store array of correct option indices as IDs
+            payload.correct_option = correctIdxs.map(idx => idx.toString()); // Store as string IDs
+        }
     }
 
     if (type === 'true_false') {
@@ -679,7 +702,7 @@ async function _saveQuestion(addAnother) {
     try {
         const res = _drawerMode === 'add'
             ? await Api.post(CONFIG.ENDPOINTS.STAFF_QUESTIONS(_examId), payload)
-            : await Api.patch(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_examId, _editQId), payload);
+            : await Api.put(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_examId, _editQId), payload);
 
         const { data, error } = await Api.parse(res);
 
