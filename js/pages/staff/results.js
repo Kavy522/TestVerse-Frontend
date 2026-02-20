@@ -74,7 +74,7 @@ function _initSidebar() {
 async function _loadExams() {
     _setExamState('loading');
     try {
-        const res = await Api.get(CONFIG.ENDPOINTS.STAFF_EXAMS);
+    const res = await Api.get(`${CONFIG.ENDPOINTS.STAFF_EXAMS}?all=true`);
         const { data, error } = await Api.parse(res);
         if (error) { _showAlert(_extractErr(error), 'error'); _setExamState('empty'); return; }
         _exams = Array.isArray(data) ? data : (data?.results ?? []);
@@ -387,6 +387,7 @@ function _initGradeDrawer() {
     document.getElementById('gradeDrawerClose')?.addEventListener('click', _closeGradeDrawer);
     document.getElementById('gradeDrawerBackdrop')?.addEventListener('click', _closeGradeDrawer);
     document.getElementById('saveAllGradesBtn')?.addEventListener('click', _saveAllGrades);
+    document.getElementById('autoGradeMcqBtn')?.addEventListener('click', _autoGradeAllMcqs);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') _closeGradeDrawer(); });
 }
 
@@ -452,8 +453,11 @@ function _renderAnswers(answers) {
     const container = document.getElementById('questionsContainer');
     container.innerHTML = '';
 
-    // MCQ summary
-    const mcqAnswers = answers.filter(a => a.question?.type === 'mcq' || a.question?.type === 'multiple_mcq');
+    // MCQ summary (auto-graded)
+    const mcqAnswers = answers.filter(a => {
+        const t = _normQType(a);
+        return t === 'mcq' || t === 'multiple_mcq';
+    });
     const mcqCorrect = mcqAnswers.filter(a => a.is_correct === true).length;
     const mcqSummary = document.getElementById('mcqSummary');
     if (mcqAnswers.length > 0) {
@@ -476,26 +480,67 @@ function _renderAnswers(answers) {
 
 function _buildAnswerCard(ans, num) {
     const q         = ans.question || {};
-    const qType     = (q.type || 'mcq').toLowerCase();
-    const isManual  = qType === 'descriptive' || qType === 'coding';
-    const isGraded  = ans.marks_obtained != null && ans.marks_obtained !== undefined;
+    const qType     = _normQType(ans);
+    const isManual  = qType === 'descriptive' || qType === 'coding'
+        || qType === 'short_answer' || qType === 'long_answer';
+    const gradedScore = ans.marks_obtained ?? ans.score;
+    const isGraded  = gradedScore != null && gradedScore !== undefined;
 
     const wrapper = document.createElement('div');
+    const answerKey = ans.id ?? ans.answer_id ?? ans.question_id ?? q.id;
     wrapper.className = `question-card ${isManual ? (isGraded ? 'graded' : 'needs-grading') : 'mcq-auto'}`;
-    wrapper.dataset.answerId   = ans.id;
+    wrapper.dataset.answerId   = answerKey;
     wrapper.dataset.questionId = q.id;
 
-    const typeLabels = { mcq:'MCQ', multiple_mcq:'Multi MCQ', descriptive:'Descriptive', coding:'Coding' };
+    const typeLabels = {
+        mcq:'MCQ',
+        multiple_mcq:'Multi MCQ',
+        descriptive:'Descriptive',
+        short_answer:'Short Answer',
+        long_answer:'Long Answer',
+        coding:'Coding',
+    };
     const typeClass  = `type-${qType}`;
 
     // Student answer display
+    const studentVal = _getStudentAnswer(ans);
     let answerHtml = '';
-    if (!ans.answer && !ans.code) {
+    
+    // Check if empty
+    const isEmpty = studentVal == null
+        || (typeof studentVal === 'string' && studentVal.trim() === '')
+        || (Array.isArray(studentVal) && studentVal.length === 0)
+        || (typeof studentVal === 'object' && Object.keys(studentVal).length === 0);
+    
+    if (isEmpty) {
         answerHtml = '<span class="qcard-answer-empty"><i class="fas fa-minus-circle"></i> No answer provided</span>';
-    } else if (qType === 'coding') {
-        answerHtml = `<code class="qcard-answer-code">${_esc(ans.code || ans.answer || '')}</code>`;
+    } else if (qType === 'coding' || (typeof studentVal === 'object' && studentVal.code)) {
+        // Coding answer
+        const code = typeof studentVal === 'object' && studentVal.code
+            ? studentVal.code
+            : (ans.code || (typeof studentVal === 'string' ? studentVal : JSON.stringify(studentVal)));
+        answerHtml = `<pre class="qcard-answer-code">${_esc(code)}</pre>`;
+    } else if (Array.isArray(studentVal)) {
+        // Array of answers (e.g., multiple choice selections)
+        const display = studentVal.map(v => {
+            if (typeof v === 'object' && v.text) return v.text;
+            if (typeof v === 'object' && v.value) return v.value;
+            return String(v);
+        }).join(', ');
+        answerHtml = `<div class="qcard-answer-text">${_esc(display)}</div>`;
+    } else if (typeof studentVal === 'object') {
+        // Object that's not coding - try to extract meaningful display
+        if (studentVal.text) {
+            answerHtml = `<div class="qcard-answer-text">${_esc(String(studentVal.text))}</div>`;
+        } else if (studentVal.value) {
+            answerHtml = `<div class="qcard-answer-text">${_esc(String(studentVal.value))}</div>`;
+        } else {
+            // Fallback: show JSON representation
+            answerHtml = `<div class="qcard-answer-text"><pre style="white-space:pre-wrap;font-size:0.85em;">${_esc(JSON.stringify(studentVal, null, 2))}</pre></div>`;
+        }
     } else {
-        answerHtml = `<div class="qcard-answer-text">${_esc(ans.answer || '')}</div>`;
+        // Primitive value (string, number, etc.)
+        answerHtml = `<div class="qcard-answer-text">${_esc(String(studentVal))}</div>`;
     }
 
     // MCQ result indicator
@@ -504,19 +549,20 @@ function _buildAnswerCard(ans, num) {
         const correct = ans.is_correct;
         const icon    = correct ? 'check-circle' : 'times-circle';
         const cls     = correct ? 'correct' : 'wrong';
-        const label   = correct ? `Correct (+${ans.marks_obtained ?? q.points ?? '—'} pts)` : 'Incorrect (0 pts)';
+        const mcqPts  = ans.marks_obtained ?? q.points ?? q.marks ?? '—';
+        const label   = correct ? `Correct (+${mcqPts} pts)` : 'Incorrect (0 pts)';
         mcqResult     = `<div class="mcq-result-row ${cls}"><i class="fas fa-${icon}"></i>${label}</div>`;
     }
 
     // Grade input (manual only)
     let gradeInputHtml = '';
     if (isManual) {
-        const maxPts = q.points ?? q.marks ?? '';
-        const curPts = isGraded ? ans.marks_obtained : '';
+        const maxPts = q.points ?? q.marks ?? ans.max_marks ?? ans.points_possible ?? '';
+        const curPts = isGraded ? gradedScore : '';
         const curFb  = ans.feedback || '';
         const rowCls = isGraded ? 'grade-input-row graded' : 'grade-input-row';
         gradeInputHtml = `
-        <div class="${rowCls}" data-answer-id="${ans.id}">
+        <div class="${rowCls}" data-answer-id="${answerKey}">
             <div class="grade-input-group">
                 <label class="grade-input-label">
                     Score <span style="color:#94a3b8;font-weight:400;">/ ${maxPts}</span>
@@ -525,14 +571,14 @@ function _buildAnswerCard(ans, num) {
                        placeholder="0"
                        min="0" max="${maxPts}"
                        value="${curPts}"
-                       data-answer-id="${ans.id}"
+                       data-answer-id="${answerKey}"
                        data-max="${maxPts}">
             </div>
             <div class="grade-input-group">
                 <label class="grade-input-label">Feedback <span style="color:#94a3b8;font-weight:400;">(optional)</span></label>
                 <textarea class="grade-feedback-input"
                           placeholder="Add feedback for the student…"
-                          data-answer-id="${ans.id}">${_esc(curFb)}</textarea>
+                          data-answer-id="${answerKey}">${_esc(curFb)}</textarea>
             </div>
         </div>`;
     }
@@ -547,7 +593,7 @@ function _buildAnswerCard(ans, num) {
         <span class="qcard-points">${q.points ?? q.marks ?? '—'} pts</span>
     </div>
     <div class="qcard-body">
-        <p class="qcard-question-text">${_esc(q.text || 'Question text not available')}</p>
+        <p class="qcard-question-text">${_esc(_getQuestionText(ans))}</p>
         <div>
             <span class="qcard-answer-label">Student Answer</span>
             ${answerHtml}
@@ -557,6 +603,72 @@ function _buildAnswerCard(ans, num) {
     </div>`;
 
     return wrapper;
+}
+
+// ── Auto Grade All MCQs ──────────────────────────────────────────────
+async function _autoGradeAllMcqs() {
+    if (!_selectedExam) return;
+    
+    const btn = document.getElementById('autoGradeMcqBtn');
+    if (!btn) return;
+    
+    if (!confirm('This will auto-grade all MCQ questions for ALL students in this exam. Continue?')) {
+        return;
+    }
+    
+    _setBtnLoading(btn, true);
+    _clearEl('gradeDrawerAlert');
+    
+    try {
+        // Call backend to auto-grade all MCQs for all students in this exam
+        const res = await Api.post(
+            CONFIG.ENDPOINTS.STAFF_EXAM_AUTO_GRADE_MCQ(_selectedExam.id),
+            {}
+        );
+        const { data, error } = await Api.parse(res);
+        
+        if (error) {
+            _setHTML('gradeDrawerAlert', _alertHtml(
+                `Auto-grading failed: ${_extractErr(error)}`,
+                'error'
+            ));
+            _setBtnLoading(btn, false);
+            return;
+        }
+        
+        // Refresh current student's answers if drawer is open
+        if (_currentResultId) {
+            try {
+                const refreshRes = await Api.get(CONFIG.ENDPOINTS.STAFF_RESULTS_ANSWERS(_currentResultId));
+                const { data: refreshData, error: refreshErr } = await Api.parse(refreshRes);
+                if (!refreshErr && refreshData) {
+                    _answers = refreshData.answers ?? refreshData ?? [];
+                    _renderAnswers(_answers);
+                }
+            } catch {
+                // Ignore refresh errors
+            }
+        }
+        
+        // Refresh results list to show updated grading status
+        if (_selectedExam) {
+            await _loadResults(_selectedExam.id);
+        }
+        
+        _setHTML('gradeDrawerAlert', _alertHtml(
+            'All MCQ answers for all students have been auto-graded successfully!',
+            'success'
+        ));
+        
+    } catch (err) {
+        console.error('[results] autoGradeMcq:', err);
+        _setHTML('gradeDrawerAlert', _alertHtml(
+            'Network error. Could not auto-grade MCQs.',
+            'error'
+        ));
+    } finally {
+        _setBtnLoading(btn, false);
+    }
 }
 
 // ── Save All Grades ────────────────────────────────────────────────
@@ -587,11 +699,15 @@ async function _saveAllGrades() {
         scoreInp.style.borderColor = '';
 
         // Find the question_id for this answer
-        const ans = _answers.find(a => String(a.id) === String(answerId));
+        const ans = _answers.find(a =>
+            String(a.id ?? a.answer_id ?? a.question_id ?? a.question?.id) === String(answerId)
+        );
         if (!ans) return;
 
+        const qId = ans.question?.id ?? ans.question_id ?? answerId;
+
         toSave.push({
-            question_id: ans.question?.id,
+            question_id: qId,
             score:       numScore,
             feedback:    feedInp?.value.trim() || '',
         });
@@ -702,6 +818,69 @@ async function _publishSingle(resultId) {
     } catch {
         _showAlert('Network error.', 'error');
     }
+}
+
+// ─═══════════════════════════════════════════════════════════════════
+//  HELPERS FOR GRADING
+// ─═══════════════════════════════════════════════════════════════════
+
+// Normalise question type across different backend shapes
+function _normQType(ans) {
+    const q   = ans.question || {};
+    const raw = (q.type || q.question_type || ans.question_type || ans.type || '').toLowerCase();
+    const map = {
+        mcq: 'mcq',
+        single_choice: 'mcq',
+        multiple_mcq: 'multiple_mcq',
+        multiple_choice: 'multiple_mcq',
+        descriptive: 'descriptive',
+        short_answer: 'short_answer',
+        long_answer: 'long_answer',
+        coding: 'coding',
+        code: 'coding',
+    };
+    return map[raw] || raw || 'mcq';
+}
+
+function _getQuestionText(ans) {
+    const q = ans.question || {};
+    return q.text
+        || q.question_text
+        || ans.question_text
+        || ans.prompt
+        || 'Question text not available';
+}
+
+function _getStudentAnswer(ans) {
+    if (!ans) return null;
+    
+    // Try various field names
+    let val = ans.student_answer
+        ?? ans.your_answer
+        ?? ans.submitted_answer
+        ?? ans.answer
+        ?? ans.response
+        ?? ans.selected_option
+        ?? ans.selected_options;
+    
+    // If it's an object, extract meaningful values
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+        // For coding questions, prefer code field
+        if (val.code) return val;
+        // For MCQ, try value or text fields
+        if (val.value != null) return val.value;
+        if (val.text != null) return val.text;
+        if (val.id != null) return val.id;
+        // If object has a single meaningful property, use it
+        const keys = Object.keys(val);
+        if (keys.length === 1 && keys[0] !== 'id') {
+            return val[keys[0]];
+        }
+        // Last resort: try to stringify if it's a simple object
+        return JSON.stringify(val);
+    }
+    
+    return val;
 }
 
 // ══════════════════════════════════════════════════════════════════

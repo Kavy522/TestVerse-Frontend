@@ -247,7 +247,8 @@ function _updateSummaryStats() {
     // ✅ backend returns "points" — fallback to "marks"
     const totalPts = _questions.reduce((s, q) => s + (parseFloat(q.points ?? q.marks) || 0), 0);
     _set('esbQCount', _questions.length);
-    _set('esbTotalQ', totalPts % 1 === 0 ? totalPts : totalPts.toFixed(1));
+  // Total marks for summary bar
+  _set('esbTotalMarks', totalPts % 1 === 0 ? totalPts : totalPts.toFixed(1));
 }
 
 // ── Type Tabs ──────────────────────────────────────────────────────
@@ -374,6 +375,7 @@ function _populateDrawer(q) {
     _val('qExplanation', q.explanation || '');
 
     if (type === 'mcq' || type === 'multiple_mcq') {
+        const isMulti = type === 'multiple_mcq';
         const opts = Array.isArray(q.options) ? q.options : [];
         document.getElementById('optionsList').innerHTML = '';
 
@@ -388,8 +390,10 @@ function _populateDrawer(q) {
         if (sel) {
             [...sel.options].forEach(o => { o.selected = false; });
             opts.forEach((opt, i) => {
+                const correctOpt = q.correct_option;
                 const isCorrect = opt.is_correct === true
-                    || String(opt.id) === String(q.correct_option);
+                    || (!isMulti && String(opt.id) === String(correctOpt))
+                    || (isMulti && Array.isArray(correctOpt) && correctOpt.map(String).includes(String(opt.id)));
                 if (isCorrect) {
                     const match = [...sel.options].find(x => x.value === String(i));
                     if (match) match.selected = true;
@@ -464,7 +468,10 @@ function _addOptionRow(value = '', placeholder = '') {
     const list = document.getElementById('optionsList');
     if (!list) return;
     const count  = list.querySelectorAll('.option-row').length;
-    if (count >= 6) { _showAlert('Maximum 6 options allowed.', 'info'); return; }
+    if (count >= 6) {
+        _setEl('drawerAlert', _alertHtml('Maximum 6 options allowed.', 'info'));
+        return;
+    }
     const letter = String.fromCharCode(65 + count);
     const row    = document.createElement('div');
     row.className = 'option-row';
@@ -479,7 +486,8 @@ function _addOptionRow(value = '', placeholder = '') {
 
     row.querySelector('.option-remove').addEventListener('click', () => {
         if (list.querySelectorAll('.option-row').length <= 2) {
-            _showAlert('Minimum 2 options required.', 'info'); return;
+            _setEl('drawerAlert', _alertHtml('Minimum 2 options required.', 'info'));
+            return;
         }
         row.remove();
         _relabelOptions();
@@ -671,7 +679,7 @@ async function _saveQuestion(addAnother) {
     try {
         const res = _drawerMode === 'add'
             ? await Api.post(CONFIG.ENDPOINTS.STAFF_QUESTIONS(_examId), payload)
-            : await Api.patch(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_editQId), payload);
+            : await Api.patch(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_examId, _editQId), payload);
 
         const { data, error } = await Api.parse(res);
 
@@ -739,7 +747,7 @@ async function _confirmDelete() {
     const btn = document.getElementById('deleteConfirmBtn');
     _setBtnLoading(btn, true);
     try {
-        const res = await Api.del(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_deleteQId));
+        const res = await Api.del(CONFIG.ENDPOINTS.STAFF_QUESTION_DETAIL(_examId, _deleteQId));
         if (res.ok || res.status === 204) {
             _questions = _questions.filter(q => String(q.id) !== String(_deleteQId));
             _applyFilter();

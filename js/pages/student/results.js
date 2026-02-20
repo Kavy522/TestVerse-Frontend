@@ -44,15 +44,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // If arriving from exam-taking with ?exam_id=X, auto-open that result
     const params = new URLSearchParams(location.search);
-    const directExamId = params.get('exam_id');
-    if (directExamId) {
-        // Find the matching result in the loaded list
-        const match = _allResults.find(r =>
-            String(r.exam_id || r.exam?.id || r.exam) === String(directExamId)
-        );
+    const directExamId   = params.get('exam_id');
+    const directAttemptId= params.get('attempt_id');
+    if (directExamId || directAttemptId) {
+        // Prefer an exact attempt match when multiple attempts exist
+        let match = null;
+        if (directAttemptId) {
+            match = _allResults.find(r =>
+                String(r.attempt_id || r.id) === String(directAttemptId)
+            );
+        }
+        if (!match && directExamId) {
+            match = _allResults.find(r =>
+                String(r.exam_id || r.exam?.id || r.exam) === String(directExamId)
+            );
+        }
         if (match) {
-            _openDetailModal(match.id || match.result_id);
-        } else {
+            _openDetailModal(match.id || match.result_id || match.attempt_id);
+        } else if (directExamId) {
             // Not published yet – fetch directly
             _openDetailModalByExamId(directExamId);
         }
@@ -159,12 +168,13 @@ async function _loadResults() {
 // ── Summary Stats ──────────────────────────────────────────────────
 function _updateSummaryStats() {
     const total   = _allResults.length;
-    let passed = 0, failed = 0, scoreSum = 0, scoreCnt = 0, best = 0;
+    let passed = 0, failed = 0, pending = 0, scoreSum = 0, scoreCnt = 0, best = 0;
 
     _allResults.forEach(r => {
         const s = _statusOf(r);
         if (s === 'pass') passed++;
         if (s === 'fail') failed++;
+        if (s === 'pending') pending++;
         const pct = _pctOf(r);
         if (pct != null) { scoreSum += pct; scoreCnt++; if (pct > best) best = pct; }
     });
@@ -172,6 +182,7 @@ function _updateSummaryStats() {
     _setText('statTotal',  total);
     _setText('statPassed', passed);
     _setText('statFailed', failed);
+    _setText('statPending', pending);
     _setText('statAvg',    scoreCnt ? `${Math.round(scoreSum / scoreCnt)}%` : '—');
     _setText('statBest',   scoreCnt ? `${Math.round(best)}%` : '—');
 }
@@ -684,7 +695,6 @@ function _statusOf(r) {
     const score   = r.score ?? r.obtained_marks ?? r.marks_obtained;
     const passing = r.passing_marks;
     if (score != null && passing != null) return score >= passing ? 'pass' : 'fail';
-    if (r.percentage != null) return r.percentage >= 40 ? 'pass' : 'fail';
     return 'pending';
 }
 

@@ -105,9 +105,9 @@ async function _loadExam() {
         }
         _exam = examData;
 
-        const attemptRes = await Api.post(CONFIG.ENDPOINTS.EXAM_ATTEMPT(_examId), {
-            attempt_id: _attemptId || undefined,
-        });
+        const attemptRes = _attemptId
+            ? await Api.get(CONFIG.ENDPOINTS.EXAM_ATTEMPT(_examId))
+            : await Api.post(CONFIG.ENDPOINTS.EXAM_ATTEMPT(_examId), {});
         const { data: attemptData, error: attemptErr } = await Api.parse(attemptRes);
         if (attemptErr || !attemptData) {
             const msg = typeof attemptErr === 'string'
@@ -121,7 +121,7 @@ async function _loadExam() {
         _questions = attemptData.questions || attemptData.question_set || [];
         _timeLeft  = attemptData.time_remaining_seconds
             ?? attemptData.duration_seconds
-            ?? (_exam.duration * 60)
+            ?? (_exam.duration ? _exam.duration * 60 : null)
             ?? 3600;
 
         if (!_questions.length) {
@@ -329,9 +329,11 @@ function _renderMcq(q) {
 
     opts.forEach((opt, i) => {
         const key  = keys[i] || String(i + 1);
-        // FIX: options already normalised in _loadExam, use opt.id ?? opt.value ?? i
-        const val  = typeof opt === 'object' ? String(opt.id ?? opt.value ?? i) : String(opt);
         const text = typeof opt === 'object' ? (opt.text || opt.label || opt.value || '') : String(opt);
+        // Always use a stable identifier (id/value/text), never the index
+        const val  = typeof opt === 'object'
+            ? String(opt.id ?? opt.value ?? text)
+            : String(opt);
         const sel  = selArr.includes(val);
 
         const div  = document.createElement('div');
@@ -730,7 +732,6 @@ async function _saveToServer(silent = true) {
             _setSaveStatus('saved', 'Saved');
             if (!silent) _showSaveToast('Answers saved!');
             try { localStorage.removeItem(LS_KEY(_examId)); } catch {}
-            _saveLocal();
         }
     } catch {
         _setSaveStatus(_isOffline ? 'local' : 'failed', _isOffline ? 'Saved locally' : 'Save failed');
@@ -777,6 +778,8 @@ async function _doSubmit() {
     const overlay = document.getElementById('submitOverlay');
     overlay.classList.remove('hidden');
     _setText('submitMsg', 'Submitting your exam…');
+    const retryBtn = document.getElementById('submitRetryBtn');
+    if (retryBtn) retryBtn.disabled = true;
 
     try {
         const payload = _buildSubmitPayload(true);
@@ -785,8 +788,10 @@ async function _doSubmit() {
 
         if (error) {
             _isSubmitting = false;
-            overlay.classList.add('hidden');
-            alert('Submission failed: ' + (typeof error === 'string' ? error : (error?.detail || 'Please try again.')));
+            const msg = typeof error === 'string'
+                ? error
+                : (error?.detail || error?.error || 'We could not submit your exam. Please try again.');
+            _showSubmitErrorOverlay('Submission failed: ' + msg);
             return;
         }
 
@@ -800,13 +805,46 @@ async function _doSubmit() {
     } catch (err) {
         console.error('[exam-taking] submit error:', err);
         _isSubmitting = false;
-        overlay.classList.add('hidden');
         _saveLocal();
-        alert('Network error during submission. Your answers are saved locally. Please try submitting again.');
+        _showSubmitErrorOverlay(
+            'Network error while submitting. Your answers are saved locally. Please check your connection and tap "Retry Submit".'
+        );
     }
 }
 
+function _showSubmitErrorOverlay(message) {
+    const overlay = document.getElementById('submitOverlay');
+    if (!overlay) {
+        // Fallback for unexpected DOM issues
+        alert(message);
+        return;
+    }
+    overlay.classList.remove('hidden');
+    _setText('submitMsg', message);
+
+    let btn = document.getElementById('submitRetryBtn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'submitRetryBtn';
+        btn.className = 'btn btn-primary submit-retry-btn';
+        btn.innerHTML = '<span class="btn-text">Retry Submit</span>';
+        btn.addEventListener('click', () => {
+            if (_isSubmitting) return;
+            _doSubmit();
+        });
+        overlay.appendChild(btn);
+    }
+    btn.disabled = false;
+}
+
 function _autoSubmit() {
+    // Capture ALL open Monaco editors, not just the currently visible one
+    Object.entries(_monacoInstances || {}).forEach(([qId, editor]) => {
+        if (!editor) return;
+        const cur = _answers[qId] || {};
+        _answers[qId] = { ...cur, code: editor.getValue() };
+    });
+    // Also capture any non-code answer on the current question
     _captureCurrentEditorState();
     _saveLocal();
     _doSubmit();

@@ -113,6 +113,8 @@ async function _loadExams() {
         if (_statusFilter) params.set('status', _statusFilter);
         if (_typeFilter)   params.set('exam_type', _typeFilter);
         if (_sort)         params.set('ordering', _sort);
+        // Include all exams created by any staff (visibility fix)
+        params.set('all', 'true');
 
         const res = await Api.get(`${CONFIG.ENDPOINTS.STAFF_EXAMS}?${params}`);
         const { data, error } = await Api.parse(res);

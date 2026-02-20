@@ -88,11 +88,20 @@ function _initSchedule() {
     const start = document.getElementById('startTime');
     const end   = document.getElementById('endTime');
 
-    // Set min to now (rounded to next 5 min)
+    // Set initial min to now (rounded to next 5 min)
     const now = new Date();
     now.setMinutes(Math.ceil(now.getMinutes() / 5) * 5, 0, 0);
     const iso = _toDatetimeLocal(now);
     if (start) start.min = iso;
+
+    // Recalculate "start" min whenever the field gains focus so it never
+    // drifts far into the past if the page stays open for a long time.
+    start?.addEventListener('focus', () => {
+        const nf = new Date();
+        nf.setMinutes(Math.ceil(nf.getMinutes() / 5) * 5, 0, 0);
+        const isoNow = _toDatetimeLocal(nf);
+        start.min = isoNow;
+    });
 
     const calc = () => {
         const s = start?.value, e = end?.value;
@@ -116,6 +125,10 @@ function _initSchedule() {
             disp?.classList.add('invalid');
             disp?.classList.remove('valid');
             _setErr('endErr', 'End time must be after start time');
+            // If previously selected end is now before the new start, clear it
+            if (end && new Date(end.value) <= new Date(s)) {
+                end.value = '';
+            }
             return;
         }
 
@@ -307,9 +320,8 @@ function _validate() {
         _setErr('passErr', 'Passing marks cannot exceed total marks'); ok = false;
     }
 
-    if (_selectedDepts.length === 0) {
-        _setErr('deptErr', 'Select at least one department'); ok = false;
-    } else _clearErr('deptErr');
+    // Department selection is optional; empty means exam is open to all departments
+    _clearErr('deptErr');
 
     return ok;
 }
@@ -339,7 +351,7 @@ async function _submit(asDraft) {
         total_marks:         String(document.getElementById('totalMarks').value),
         passing_marks:       String(document.getElementById('passingMarks').value),
         allowed_departments: _selectedDepts,
-        is_published:        false,
+        is_published:        !asDraft,
         // Derived from result_visibility
         show_score:          document.getElementById('resultVisibility').value === 'immediate',
         result_visibility:   document.getElementById('resultVisibility').value,
@@ -363,6 +375,8 @@ async function _submit(asDraft) {
         const examId = data?.id;
 
         if (asDraft) {
+            _submitting = false;
+            _setBtnLoading(btn, false);
             _showAlert('Exam saved as draft!', 'success');
             setTimeout(() => { window.location.href = `exams.html`; }, 1200);
         } else {
