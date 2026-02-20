@@ -3,297 +3,318 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Student Dashboard - TestVerse">
-    <title>Dashboard | TestVerse</title>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
-    
-    <!-- CSS -->
-    <link rel="stylesheet" href="../../css/main.css">
+    <title>Dashboard | TestVerse Student</title>
+
+    <link rel="icon" href="../../assets/icons/exam.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Core -->
+    <link rel="stylesheet" href="../../css/core/reset.css">
+    <link rel="stylesheet" href="../../css/core/variables.css">
+    <link rel="stylesheet" href="../../css/core/typography.css">
+    <link rel="stylesheet" href="../../css/core/layout.css">
+
+    <!-- Components -->
+    <link rel="stylesheet" href="../../css/components/buttons.css">
+    <link rel="stylesheet" href="../../css/components/cards.css">
+    <link rel="stylesheet" href="../../css/components/badges.css">
+    <link rel="stylesheet" href="../../css/components/alerts.css">
+
+    <!-- Page -->
     <link rel="stylesheet" href="../../css/pages/student/dashboard.css">
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
-    <!-- ==================== HEADER / NAVIGATION ==================== -->
-    <header class="dashboard-header">
-        <div class="header-container">
-            <!-- Logo -->
-            <a href="../../index.html" class="header-logo">
-                <div class="logo-icon">T</div>
+<body class="dashboard-layout">
+
+    <!-- ══ SIDEBAR ══════════════════════════════════════════════════ -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <a href="../../index.html" class="logo">
+                <i class="fas fa-graduation-cap"></i>
                 <span class="logo-text">TestVerse</span>
             </a>
+        </div>
 
-            <!-- Navigation -->
-            <nav class="header-nav">
-                <a href="dashboard.html" class="nav-link active">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                    </svg>
-                    <span>Dashboard</span>
-                </a>
-                <a href="exams.html" class="nav-link">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10 9 9 9 8 9"></polyline>
-                    </svg>
-                    <span>Exams</span>
-                </a>
-                <a href="results.html" class="nav-link">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                    </svg>
-                    <span>Results</span>
-                </a>
-                <a href="history.html" class="nav-link">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    <span>History</span>
-                </a>
-            </nav>
+        <nav class="sidebar-nav">
+            <a href="dashboard.html" class="nav-item active">
+                <i class="fas fa-home"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="exams.html" class="nav-item">
+                <i class="fas fa-file-alt"></i>
+                <span>Exams</span>
+            </a>
+            <a href="results.html" class="nav-item">
+                <i class="fas fa-chart-bar"></i>
+                <span>My Results</span>
+            </a>
+            <a href="history.html" class="nav-item">
+                <i class="fas fa-history"></i>
+                <span>History</span>
+            </a>
+            <a href="leaderboard.html" class="nav-item">
+                <i class="fas fa-trophy"></i>
+                <span>Leaderboard</span>
+            </a>
+            <a href="analytics.html" class="nav-item">
+                <i class="fas fa-chart-line"></i>
+                <span>Analytics</span>
+            </a>
+            <a href="profile.html" class="nav-item">
+                <i class="fas fa-user-circle"></i>
+                <span>Profile</span>
+            </a>
+        </nav>
 
-            <!-- User Menu -->
-            <div class="header-user">
-                <button class="notification-btn" id="notificationBtn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                    </svg>
-                    <span class="notification-badge" id="notificationBadge">0</span>
-                </button>
-
-                <div class="user-dropdown">
-                    <button class="user-btn" id="userBtn">
-                        <div class="user-avatar" id="userAvatar">S</div>
-                        <div class="user-info">
-                            <span class="user-name" id="userName">Loading...</span>
-                            <span class="user-role">Student</span>
-                        </div>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </button>
-
-                    <div class="dropdown-menu" id="userDropdown">
-                        <a href="profile.html" class="dropdown-item">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
-                            </svg>
-                            <span>Profile</span>
-                        </a>
-                        <a href="analytics.html" class="dropdown-item">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="20" x2="18" y2="10"></line>
-                                <line x1="12" y1="20" x2="12" y2="4"></line>
-                                <line x1="6" y1="20" x2="6" y2="14"></line>
-                            </svg>
-                            <span>Analytics</span>
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <button class="dropdown-item" id="logoutBtn">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                <polyline points="16 17 21 12 16 7"></polyline>
-                                <line x1="21" y1="12" x2="9" y2="12"></line>
-                            </svg>
-                            <span>Logout</span>
-                        </button>
-                    </div>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-card">
+                <img src="https://ui-avatars.com/api/?name=Student&background=6366f1&color=fff"
+                     alt="Avatar" class="su-avatar" id="sidebarAvatar">
+                <div class="su-info">
+                    <span class="su-name" id="sidebarName">Loading…</span>
+                    <span class="su-role">Student</span>
                 </div>
             </div>
-
-            <!-- Mobile Menu Toggle -->
-            <button class="mobile-menu-toggle" id="mobileMenuToggle">
-                <span></span>
-                <span></span>
-                <span></span>
+            <button class="nav-item logout-btn" id="logoutBtn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
             </button>
         </div>
-    </header>
+    </aside>
 
-    <!-- ==================== MAIN CONTENT ==================== -->
-    <main class="dashboard-main">
-        <div class="dashboard-container">
-            
-            <!-- Welcome Section -->
-            <section class="welcome-section">
-                <div class="welcome-content">
-                    <div class="welcome-text">
-                        <h1 class="welcome-title">Welcome back, <span id="welcomeName">Student</span>! 👋</h1>
-                        <p class="welcome-subtitle">Here's what's happening with your exams today</p>
+    <!-- ══ MAIN CONTENT ══════════════════════════════════════════════ -->
+    <main class="main-content">
+
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="mobile-menu-toggle" id="mobileSidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1 class="page-title">Dashboard</h1>
+            </div>
+            <div class="topbar-right">
+                <button class="icon-btn" id="notificationBtn" aria-label="Notifications">
+                    <i class="fas fa-bell"></i>
+                    <span class="notif-badge hidden" id="notifBadge">0</span>
+                </button>
+                <div class="user-menu">
+                    <img src="https://ui-avatars.com/api/?name=Student&background=6366f1&color=fff"
+                         alt="Avatar" class="user-avatar" id="topbarAvatar">
+                    <div class="user-info">
+                        <span class="user-name" id="topbarName">Loading…</span>
+                        <span class="user-role">Student</span>
                     </div>
-                    <div class="welcome-actions">
-                        <button class="btn btn-primary" onclick="window.location.href='exams.html'">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                            </svg>
-                            <span>Browse Exams</span>
-                        </button>
-                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <div class="page-content">
+
+            <div id="alertContainer"></div>
+
+            <!-- Welcome Banner -->
+            <section class="welcome-banner">
+                <div class="wb-left">
+                    <h2 class="wb-title">Welcome back, <span id="welcomeName">Student</span>! 👋</h2>
+                    <p class="wb-sub">Here's your exam activity at a glance.</p>
+                </div>
+                <div class="wb-right">
+                    <a href="exams.html" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Browse Exams
+                    </a>
                 </div>
             </section>
 
-            <!-- Stats Cards -->
-            <section class="stats-section">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon stat-icon-primary">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-label">Available Exams</div>
-                            <div class="stat-value" id="availableExamsCount">
-                                <div class="stat-skeleton"></div>
-                            </div>
-                        </div>
-                    </div>
+            <!-- ── STAT CARDS ──────────────────────────────────────── -->
+            <section class="stats-grid">
 
-                    <div class="stat-card">
-                        <div class="stat-icon stat-icon-success">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-label">Completed</div>
-                            <div class="stat-value" id="completedExamsCount">
-                                <div class="stat-skeleton"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-icon stat-icon-warning">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-label">Upcoming</div>
-                            <div class="stat-value" id="upcomingExamsCount">
-                                <div class="stat-skeleton"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-icon stat-icon-info">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                            </svg>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-label">Average Score</div>
-                            <div class="stat-value" id="averageScore">
-                                <div class="stat-skeleton"></div>
-                            </div>
-                        </div>
+                <div class="stat-card">
+                    <div class="stat-icon si-primary"><i class="fas fa-file-alt"></i></div>
+                    <div class="stat-body">
+                        <span class="stat-lbl">Available Exams</span>
+                        <span class="stat-val" id="statAvailable">
+                            <span class="loader-dot"></span>
+                        </span>
                     </div>
                 </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon si-success"><i class="fas fa-check-circle"></i></div>
+                    <div class="stat-body">
+                        <span class="stat-lbl">Completed</span>
+                        <span class="stat-val" id="statCompleted">
+                            <span class="loader-dot"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon si-warning"><i class="fas fa-clock"></i></div>
+                    <div class="stat-body">
+                        <span class="stat-lbl">Upcoming</span>
+                        <span class="stat-val" id="statUpcoming">
+                            <span class="loader-dot"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon si-info"><i class="fas fa-percentage"></i></div>
+                    <div class="stat-body">
+                        <span class="stat-lbl">Avg Score</span>
+                        <span class="stat-val" id="statAvgScore">
+                            <span class="loader-dot"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon si-violet"><i class="fas fa-trophy"></i></div>
+                    <div class="stat-body">
+                        <span class="stat-lbl">Best Score</span>
+                        <span class="stat-val" id="statBestScore">
+                            <span class="loader-dot"></span>
+                        </span>
+                    </div>
+                </div>
+
             </section>
 
-            <!-- Main Content Grid -->
-            <div class="content-grid">
-                
-                <!-- Left Column - Available & Upcoming Exams -->
-                <div class="content-left">
-                    
-                    <!-- Available Exams -->
-                    <section class="dashboard-section">
-                        <div class="section-header">
-                            <h2 class="section-title">Available Exams</h2>
-                            <a href="exams.html" class="section-link">View All →</a>
-                        </div>
-                        
-                        <div class="exams-list" id="availableExamsList">
-                            <!-- Loading skeleton -->
-                            <div class="exam-card-skeleton"></div>
-                            <div class="exam-card-skeleton"></div>
-                        </div>
-                    </section>
-
-                    <!-- Upcoming Exams -->
-                    <section class="dashboard-section">
-                        <div class="section-header">
-                            <h2 class="section-title">Upcoming Exams</h2>
-                        </div>
-                        
-                        <div class="upcoming-list" id="upcomingExamsList">
-                            <!-- Loading skeleton -->
-                            <div class="upcoming-skeleton"></div>
-                            <div class="upcoming-skeleton"></div>
-                            <div class="upcoming-skeleton"></div>
-                        </div>
-                    </section>
-
+            <!-- ── LIVE NOW BANNER (hidden until active exam exists) ── -->
+            <div class="live-exam-alert hidden" id="liveExamAlert">
+                <div class="lea-left">
+                    <span class="lea-pulse-wrap">
+                        <span class="lea-dot"></span>
+                    </span>
+                    <div>
+                        <div class="lea-title">Exam in Progress!</div>
+                        <div class="lea-sub" id="liveExamName">Loading…</div>
+                    </div>
                 </div>
-
-                <!-- Right Column - Recent Results & Quick Actions -->
-                <div class="content-right">
-                    
-                    <!-- Recent Results -->
-                    <section class="dashboard-section">
-                        <div class="section-header">
-                            <h2 class="section-title">Recent Results</h2>
-                            <a href="results.html" class="section-link">View All →</a>
-                        </div>
-                        
-                        <div class="results-list" id="recentResultsList">
-                            <!-- Loading skeleton -->
-                            <div class="result-skeleton"></div>
-                            <div class="result-skeleton"></div>
-                            <div class="result-skeleton"></div>
-                        </div>
-                    </section>
-
-                    <!-- Quick Tips -->
-                    <section class="dashboard-section tips-section">
-                        <div class="section-header">
-                            <h2 class="section-title">Quick Tips</h2>
-                        </div>
-                        
-                        <div class="tips-list">
-                            <div class="tip-item">
-                                <div class="tip-icon">💡</div>
-                                <div class="tip-text">Review exam instructions before starting</div>
-                            </div>
-                            <div class="tip-item">
-                                <div class="tip-icon">⏰</div>
-                                <div class="tip-text">Keep track of time during exams</div>
-                            </div>
-                            <div class="tip-item">
-                                <div class="tip-icon">✅</div>
-                                <div class="tip-text">Review your answers before submitting</div>
-                            </div>
-                        </div>
-                    </section>
-
+                <div class="lea-right">
+                    <span class="lea-timer" id="liveExamTimer">--:--</span>
+                    <a href="#" class="btn btn-live" id="liveExamResumeBtn">
+                        <i class="fas fa-play"></i> Resume
+                    </a>
                 </div>
-
             </div>
 
+            <!-- ── MAIN GRID ───────────────────────────────────────── -->
+            <div class="dash-grid">
+
+                <!-- Available Exams -->
+                <section class="dash-card dash-card-lg">
+                    <div class="dc-header">
+                        <h3 class="dc-title"><i class="fas fa-file-alt"></i> Available Exams</h3>
+                        <a href="exams.html" class="dc-link">View all</a>
+                    </div>
+                    <div class="dc-body" id="availableExamsList">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading exams…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Recent Results -->
+                <section class="dash-card">
+                    <div class="dc-header">
+                        <h3 class="dc-title"><i class="fas fa-chart-bar"></i> Recent Results</h3>
+                        <a href="results.html" class="dc-link">View all</a>
+                    </div>
+                    <div class="dc-body" id="recentResultsList">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading results…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Upcoming Exams -->
+                <section class="dash-card">
+                    <div class="dc-header">
+                        <h3 class="dc-title"><i class="fas fa-calendar-alt"></i> Upcoming</h3>
+                    </div>
+                    <div class="dc-body" id="upcomingExamsList">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Performance Snapshot -->
+                <section class="dash-card">
+                    <div class="dc-header">
+                        <h3 class="dc-title"><i class="fas fa-chart-pie"></i> Performance</h3>
+                        <a href="analytics.html" class="dc-link">Details</a>
+                    </div>
+                    <div class="dc-body" id="performancePanel">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Leaderboard Sneak Peek -->
+                <section class="dash-card">
+                    <div class="dc-header">
+                        <h3 class="dc-title"><i class="fas fa-trophy"></i> Top Students</h3>
+                        <a href="leaderboard.html" class="dc-link">Full board</a>
+                    </div>
+                    <div class="dc-body" id="leaderboardSnippet">
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Loading…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Actions -->
+                <section class="dash-card dash-card-actions">
+                    <div class="dc-header">
+                        <h3 class="dc-title"><i class="fas fa-bolt"></i> Quick Actions</h3>
+                    </div>
+                    <div class="dc-body">
+                        <div class="quick-actions">
+                            <a href="exams.html" class="qa-btn">
+                                <i class="fas fa-search"></i>
+                                <span>Find Exam</span>
+                            </a>
+                            <a href="results.html" class="qa-btn">
+                                <i class="fas fa-chart-bar"></i>
+                                <span>My Results</span>
+                            </a>
+                            <a href="history.html" class="qa-btn">
+                                <i class="fas fa-history"></i>
+                                <span>History</span>
+                            </a>
+                            <a href="leaderboard.html" class="qa-btn">
+                                <i class="fas fa-trophy"></i>
+                                <span>Leaderboard</span>
+                            </a>
+                            <a href="analytics.html" class="qa-btn">
+                                <i class="fas fa-chart-line"></i>
+                                <span>Analytics</span>
+                            </a>
+                            <a href="profile.html" class="qa-btn">
+                                <i class="fas fa-user-edit"></i>
+                                <span>Profile</span>
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
         </div>
     </main>
+
     <script src="../../js/config.js"></script>
-<script src="../../js/api.js"></script>
-<script src="../../js/auth.js"></script>
-<script src="../../js/ui.js"></script>
-<script src="../../js/pages/student/dashboard.js"></script>
+    <script src="../../js/api.js"></script>
+    <script src="../../js/auth.js"></script>
+    <script src="../../js/ui.js"></script>
+    <script src="../../js/pages/student/dashboard.js"></script>
 </body>
 </html>
