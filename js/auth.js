@@ -34,6 +34,16 @@ const Auth = (() => {
   };
 
   /**
+   * Logout and redirect to home page
+   */
+  const logoutAndRedirectHome = () => {
+    Api.clearTokens();
+    // Use absolute URL to ensure proper redirection
+    const baseUrl = window.location.origin;
+    window.location.href = baseUrl + '/index.html';
+  };
+
+  /**
    * Redirect to the correct dashboard based on stored user role.
    * BUG FIX: was using getUser() which could be null if profile fetch failed.
    * Now falls back to student dashboard safely.
@@ -152,7 +162,9 @@ const Auth = (() => {
 
   const logout = () => {
     Api.clearTokens();
-    window.location.href = CONFIG.ROUTES.LOGIN;
+    // Use absolute URL to ensure proper redirection
+    const baseUrl = window.location.origin;
+    window.location.href = baseUrl + '/index.html';
   };
 
   // ─── Error Normalizer ────────────────────────────────────────────────────────
@@ -192,6 +204,7 @@ const Auth = (() => {
     isStudent,
     login,
     logout,
+    logoutAndRedirectHome,
     requireAuth,
     requireStaff,
     redirectIfLoggedIn,

@@ -75,10 +75,10 @@ const CONFIG = {
 
   // Page routes
   ROUTES: {
-    HOME:         'index.html',
-    LOGIN:        'login.html',
-    REGISTER:     'register.html',
-    STUDENT_DASH: 'pages/student/dashboard.html',
-    STAFF_DASH:   'pages/staff/dashboard.html',
+    HOME:         '/index.html',
+    LOGIN:        '/login.html',
+    REGISTER:     '/register.html',
+    STUDENT_DASH: '/pages/student/dashboard.html',
+    STAFF_DASH:   '/pages/staff/dashboard.html',
   },
 };

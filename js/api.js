@@ -42,7 +42,8 @@ const Api = (() => {
       if (!res.ok) {
         clearTokens();
         // Avoid calling Auth here to prevent circular dependency at module level
-        window.location.href = CONFIG.ROUTES.LOGIN + '?msg=' +
+        const baseUrl = window.location.origin;
+        window.location.href = baseUrl + '/index.html?msg=' +
           encodeURIComponent('Your session has expired. Please log in again.');
         throw new Error('Session expired');
       }
