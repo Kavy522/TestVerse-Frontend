@@ -223,8 +223,8 @@
         <div class="user-identity-card" id="userIdentityCard">
             <img class="uid-avatar" id="uidAvatar" src="" alt="">
             <div class="uid-info">
-                <span class="uid-name"  id="uidName">—</span>
-                <span class="uid-email" id="uidEmail">—</span>
+                <span class="uid-name"     id="uidName">—</span>
+                <span class="uid-email"    id="uidEmail">—</span>
                 <span class="uid-username" id="uidUsername">—</span>
             </div>
             <div class="uid-lock-badge" title="Name, email &amp; username can only be changed by the user">
@@ -232,9 +232,7 @@
             </div>
         </div>
 
-        <div class="drawer-divider">
-            <span>Editable Fields</span>
-        </div>
+        <div class="drawer-divider"><span>Editable Fields</span></div>
 
         <!-- Role -->
         <div class="drawer-field">
@@ -249,17 +247,19 @@
             </div>
         </div>
 
-        <!-- Department -->
+        <!-- ══ FIXED: Department dropdown ══ -->
         <div class="drawer-field">
             <label class="drawer-label" for="dDepartment">
                 Department
                 <span class="req">*</span>
                 <span class="staff-note" id="deptNote">Staff need department too</span>
             </label>
-            <input type="text" id="dDepartment" class="drawer-input"
-                   placeholder="e.g. Computer Science"
-                   maxlength="120" list="deptDatalist" autocomplete="off">
-            <datalist id="deptDatalist"></datalist>
+            <div class="dept-select-wrap">
+                <i class="fas fa-building dept-select-icon"></i>
+                <select id="dDepartment" class="drawer-select">
+                    <option value="" disabled selected>Select department…</option>
+                </select>
+            </div>
             <span class="drawer-error" id="dDepartmentErr"></span>
         </div>
 
@@ -301,7 +301,6 @@
         </button>
     </div>
 </aside>
-
 
 <!-- ══ DELETE MODAL ══ -->
 <div class="modal" id="deleteModal">

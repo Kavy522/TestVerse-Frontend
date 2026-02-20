@@ -25,6 +25,9 @@
 </head>
 <body class="dashboard-layout">
 
+    <!-- Mobile overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <!-- ══ SIDEBAR ══════════════════════════════════════════════════ -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -128,10 +131,8 @@
                 <div class="stat-card">
                     <div class="stat-icon si-primary"><i class="fas fa-file-alt"></i></div>
                     <div class="stat-body">
-                        <span class="stat-lbl">Available Exams</span>
-                        <span class="stat-val" id="statAvailable">
-                            <span class="loader-dot"></span>
-                        </span>
+                        <span class="stat-lbl">Available</span>
+                        <span class="stat-val" id="statAvailable"><span class="loader-dot"></span></span>
                     </div>
                 </div>
 
@@ -139,9 +140,7 @@
                     <div class="stat-icon si-success"><i class="fas fa-check-circle"></i></div>
                     <div class="stat-body">
                         <span class="stat-lbl">Completed</span>
-                        <span class="stat-val" id="statCompleted">
-                            <span class="loader-dot"></span>
-                        </span>
+                        <span class="stat-val" id="statCompleted"><span class="loader-dot"></span></span>
                     </div>
                 </div>
 
@@ -149,9 +148,7 @@
                     <div class="stat-icon si-warning"><i class="fas fa-clock"></i></div>
                     <div class="stat-body">
                         <span class="stat-lbl">Upcoming</span>
-                        <span class="stat-val" id="statUpcoming">
-                            <span class="loader-dot"></span>
-                        </span>
+                        <span class="stat-val" id="statUpcoming"><span class="loader-dot"></span></span>
                     </div>
                 </div>
 
@@ -159,9 +156,7 @@
                     <div class="stat-icon si-info"><i class="fas fa-percentage"></i></div>
                     <div class="stat-body">
                         <span class="stat-lbl">Avg Score</span>
-                        <span class="stat-val" id="statAvgScore">
-                            <span class="loader-dot"></span>
-                        </span>
+                        <span class="stat-val" id="statAvgScore"><span class="loader-dot"></span></span>
                     </div>
                 </div>
 
@@ -169,20 +164,16 @@
                     <div class="stat-icon si-violet"><i class="fas fa-trophy"></i></div>
                     <div class="stat-body">
                         <span class="stat-lbl">Best Score</span>
-                        <span class="stat-val" id="statBestScore">
-                            <span class="loader-dot"></span>
-                        </span>
+                        <span class="stat-val" id="statBestScore"><span class="loader-dot"></span></span>
                     </div>
                 </div>
 
             </section>
 
-            <!-- ── LIVE NOW BANNER (hidden until active exam exists) ── -->
+            <!-- ── LIVE NOW BANNER ─────────────────────────────────── -->
             <div class="live-exam-alert hidden" id="liveExamAlert">
                 <div class="lea-left">
-                    <span class="lea-pulse-wrap">
-                        <span class="lea-dot"></span>
-                    </span>
+                    <span class="lea-pulse-wrap"><span class="lea-dot"></span></span>
                     <div>
                         <div class="lea-title">Exam in Progress!</div>
                         <div class="lea-sub" id="liveExamName">Loading…</div>
@@ -199,7 +190,7 @@
             <!-- ── MAIN GRID ───────────────────────────────────────── -->
             <div class="dash-grid">
 
-                <!-- Available Exams -->
+                <!-- Available Exams (spans 2 cols) -->
                 <section class="dash-card dash-card-lg">
                     <div class="dc-header">
                         <h3 class="dc-title"><i class="fas fa-file-alt"></i> Available Exams</h3>
@@ -268,8 +259,43 @@
                     </div>
                 </section>
 
-            </div>
-        </div>
+                <!-- Quick Actions (full width) -->
+                <section class="dash-card dash-card-actions">
+                    <div class="dc-header">
+                        <h3 class="dc-title"><i class="fas fa-bolt"></i> Quick Actions</h3>
+                    </div>
+                    <div class="dc-body">
+                        <div class="quick-actions">
+                            <a href="exams.html" class="qa-btn">
+                                <i class="fas fa-search"></i>
+                                Browse Exams
+                            </a>
+                            <a href="results.html" class="qa-btn">
+                                <i class="fas fa-chart-bar"></i>
+                                My Results
+                            </a>
+                            <a href="leaderboard.html" class="qa-btn">
+                                <i class="fas fa-trophy"></i>
+                                Leaderboard
+                            </a>
+                            <a href="analytics.html" class="qa-btn">
+                                <i class="fas fa-chart-line"></i>
+                                Analytics
+                            </a>
+                            <a href="profile.html" class="qa-btn">
+                                <i class="fas fa-user-circle"></i>
+                                Profile
+                            </a>
+                            <a href="exams.html?filter=upcoming" class="qa-btn">
+                                <i class="fas fa-calendar-plus"></i>
+                                Schedule
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+            </div><!-- /.dash-grid -->
+        </div><!-- /.page-content -->
     </main>
 
     <script src="../../js/config.js"></script>

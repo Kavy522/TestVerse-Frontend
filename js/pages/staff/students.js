@@ -8,6 +8,23 @@
  */
 'use strict';
 
+// ── Canonical department list (same as examcreate.js) ──────────────
+const DEPARTMENTS = [
+    'Computer Science',
+    'Information Technology',
+    'Electronics & Communication',
+    'Electrical Engineering',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Chemical Engineering',
+    'Biotechnology',
+    'Mathematics',
+    'Physics',
+    'Commerce',
+    'Management Studies',
+    'Arts & Humanities',
+];
+
 // ── State ──────────────────────────────────────────────────────────
 let _allUsers   = [];
 let _filtered   = [];
@@ -21,7 +38,7 @@ let _editUserId  = null;
 let _saving      = false;
 
 let _deleteUserId = null;
-let _roleAction   = null; // { userId, name, newRole }
+let _roleAction   = null;
 let _selectedIds  = new Set();
 
 // ── Boot ───────────────────────────────────────────────────────────
@@ -41,7 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await _loadUsers();
 });
 
-// ── Topbar ─────────────────────────────────────────────────────────
+// ── User ───────────────────────────────────────────────────────────
 function _initTopbarUser() {
     const user = Auth.getUser(); if (!user) return;
     const name = user.name || user.username || user.email?.split('@')[0] || 'Staff';
@@ -100,30 +117,48 @@ function _updateStats() {
     _setText('statDepts',    depts.size);
 }
 
+/**
+ * Builds department lists:
+ *  1. Toolbar <select> filter — from API users only
+ *  2. Drawer <select> — DEPARTMENTS constant merged with any extra
+ *     departments found in the API (so nothing is ever missing)
+ */
 function _buildDeptOptions() {
-    const depts = [...new Set(_allUsers.map(u => u.department).filter(Boolean))].sort();
+    // Extra depts from API not in the canonical list
+    const apiDepts = [...new Set(_allUsers.map(u => u.department).filter(Boolean))].sort();
+    const extraDepts = apiDepts.filter(d => !DEPARTMENTS.includes(d));
 
-    // Toolbar dropdown
-    const sel = document.getElementById('deptFilter');
-    if (sel) {
-        const prev = sel.value;
-        sel.innerHTML = '<option value="">All Departments</option>';
-        depts.forEach(d => {
+    // Merged & sorted full list for drawer
+    const allDepts = [...DEPARTMENTS, ...extraDepts];
+
+    // ── Toolbar dropdown (filter by dept) ──
+    const toolbarSel = document.getElementById('deptFilter');
+    if (toolbarSel) {
+        const prev = toolbarSel.value;
+        toolbarSel.innerHTML = '<option value="">All Departments</option>';
+        apiDepts.forEach(d => {
             const o = document.createElement('option');
             o.value = d; o.textContent = d;
-            sel.appendChild(o);
+            toolbarSel.appendChild(o);
         });
-        sel.value = prev;
+        toolbarSel.value = prev;
     }
 
-    // Drawer datalist
-    const dl = document.getElementById('deptDatalist');
-    if (dl) {
-        dl.innerHTML = '';
-        depts.forEach(d => {
-            const o = document.createElement('option'); o.value = d;
-            dl.appendChild(o);
+    // ── Drawer <select> — full canonical list ──
+    const drawerSel = document.getElementById('dDepartment');
+    if (drawerSel) {
+        // Remember current selection so we can restore it
+        const current = drawerSel.value;
+        drawerSel.innerHTML = '<option value="" disabled>Select department…</option>';
+        allDepts.forEach(d => {
+            const o = document.createElement('option');
+            o.value = d; o.textContent = d;
+            drawerSel.appendChild(o);
         });
+        // Restore selection if still valid
+        if (current && allDepts.includes(current)) {
+            drawerSel.value = current;
+        }
     }
 }
 
@@ -200,7 +235,7 @@ function _buildRow(u) {
     const joined = u.date_joined
         ? new Date(u.date_joined).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
         : '—';
-    const sel    = _selectedIds.has(String(u.id));
+    const sel = _selectedIds.has(String(u.id));
 
     const enrollCell = (r === 'student' && u.enrollment_id)
         ? `<span class="enroll-tag">${_esc(u.enrollment_id)}</span>`
@@ -213,7 +248,6 @@ function _buildRow(u) {
     const roleIcon  = r === 'staff' ? 'chalkboard-teacher' : 'user-graduate';
     const roleBadge = `<span class="role-badge ${r}"><i class="fas fa-${roleIcon}"></i>${r}</span>`;
 
-    // Active indicator
     const activeDot = u.is_active !== false
         ? `<span class="active-dot active" title="Active"></span>`
         : `<span class="active-dot inactive" title="Inactive"></span>`;
@@ -379,7 +413,7 @@ async function _bulkSetRole(newRole) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  DRAWER — EDIT ONLY (read-only identity + editable fields)
+//  DRAWER
 // ══════════════════════════════════════════════════════════════════
 
 function _initDrawer() {
@@ -388,12 +422,10 @@ function _initDrawer() {
     document.getElementById('drawerBackdrop')?.addEventListener('click',   _closeDrawer);
     document.getElementById('drawerSaveBtn')?.addEventListener('click',    _saveUser);
 
-    // Role buttons inside drawer
     document.querySelectorAll('.role-btn').forEach(btn =>
         btn.addEventListener('click', () => _setDrawerRole(btn.dataset.value))
     );
 
-    // Toggle label update
     document.getElementById('dIsActive')?.addEventListener('change', e => {
         _setText('isActiveLabel', e.target.checked ? 'Active' : 'Inactive');
     });
@@ -404,17 +436,18 @@ function _initDrawer() {
 async function _openDrawer(userId) {
     _editUserId = userId;
 
-    // Reset UI
     _clearEl('drawerAlert');
     _clearErr('dDepartmentErr');
     _clearErr('dEnrollmentIdErr');
     _setText('drawerSubtitle', 'Loading user details…');
     _showDrawerLoading(true);
 
-    // Open panel immediately with spinner
     document.getElementById('userDrawer').classList.add('open');
     document.getElementById('drawerBackdrop').classList.add('show');
     document.body.style.overflow = 'hidden';
+
+    // Always rebuild dropdown options fresh when drawer opens
+    _buildDeptOptions();
 
     try {
         const res = await Api.get(CONFIG.ENDPOINTS.STAFF_STUDENT_DETAIL(userId));
@@ -426,20 +459,34 @@ async function _openDrawer(userId) {
             return;
         }
 
-        // Update cache
         const idx = _allUsers.findIndex(u => String(u.id) === String(userId));
         if (idx !== -1) _allUsers[idx] = { ..._allUsers[idx], ...data };
 
-        // ── Fill READ-ONLY identity card ──
+        // Fill read-only identity
         const name = data.name || data.username || data.email || '—';
         _setImg('uidAvatar', _avatar(name));
         _setText('uidName',     name);
         _setText('uidEmail',    data.email    || '—');
         _setText('uidUsername', data.username ? `@${data.username}` : '—');
 
-        // ── Fill EDITABLE fields ──
+        // Fill editable fields
         _setDrawerRole(_role(data));
-        _setVal('dDepartment',   data.department    || '');
+
+        // Set department dropdown value
+        const deptSel = document.getElementById('dDepartment');
+        if (deptSel && data.department) {
+            // If user's dept isn't in dropdown yet, add it
+            if (![...deptSel.options].some(o => o.value === data.department)) {
+                const o = document.createElement('option');
+                o.value = data.department;
+                o.textContent = data.department;
+                deptSel.appendChild(o);
+            }
+            deptSel.value = data.department;
+        } else if (deptSel) {
+            deptSel.value = '';
+        }
+
         _setVal('dEnrollmentId', data.enrollment_id || '');
 
         const activeChk = document.getElementById('dIsActive');
@@ -450,7 +497,6 @@ async function _openDrawer(userId) {
 
         _setText('drawerSubtitle', `Editing ${name}`);
         _showDrawerLoading(false);
-        document.getElementById('dDepartment')?.focus();
 
     } catch {
         _setHTML('drawerAlert', _alertHtml('Network error. Could not load user.', 'error'));
@@ -477,10 +523,8 @@ function _setDrawerRole(role) {
     document.querySelectorAll('.role-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.value === role)
     );
-    // enrollment_id only for students
     const wrap = document.getElementById('dEnrollWrap');
     if (wrap) wrap.style.display = role === 'student' ? '' : 'none';
-    // dept note for staff
     const note = document.getElementById('deptNote');
     if (note) note.classList.toggle('visible', role === 'staff');
 }
@@ -494,10 +538,9 @@ function _validateDrawer() {
     let ok = true;
 
     const dept = _getVal('dDepartment').trim();
-    if (!dept) { _setErr('dDepartmentErr', 'Department is required'); ok = false; }
+    if (!dept) { _setErr('dDepartmentErr', 'Please select a department'); ok = false; }
     else        _clearErr('dDepartmentErr');
 
-    // enrollment_id not strictly required, only validate format if provided
     const enroll = _getVal('dEnrollmentId').trim();
     if (_currentDrawerRole() === 'student' && enroll && enroll.length > 50) {
         _setErr('dEnrollmentIdErr', 'Max 50 characters'); ok = false;
@@ -506,7 +549,7 @@ function _validateDrawer() {
     return ok;
 }
 
-// ── Build Payload — ONLY allowed fields ────────────────────────────
+// ── Build Payload ────────────────────────────────────────────────────
 function _buildPayload() {
     const role    = _currentDrawerRole();
     const payload = {
@@ -514,7 +557,6 @@ function _buildPayload() {
         department: _getVal('dDepartment').trim(),
         is_active:  document.getElementById('dIsActive')?.checked ?? true,
     };
-    // enrollment_id only for students
     if (role === 'student') {
         payload.enrollment_id = _getVal('dEnrollmentId').trim() || '';
     }
@@ -543,7 +585,6 @@ async function _saveUser() {
             return;
         }
 
-        // Merge updated fields back into local list
         const idx = _allUsers.findIndex(u => String(u.id) === String(_editUserId));
         if (idx !== -1) _allUsers[idx] = { ..._allUsers[idx], ...data };
 
@@ -641,7 +682,6 @@ async function _confirmRoleChange() {
     const btn = document.getElementById('roleConfirmBtn');
     _setBtnLoading(btn, true);
     try {
-        // role is an allowed field → send only role
         const res = await Api.patch(CONFIG.ENDPOINTS.STAFF_STUDENT_DETAIL(userId), { role: newRole });
         const { data, error } = await Api.parse(res);
         if (error) {
@@ -716,7 +756,6 @@ function _esc(s) {
         .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// Active dot CSS added inline for table rows
 (function _injectActiveDotStyles() {
     const s = document.createElement('style');
     s.textContent = `

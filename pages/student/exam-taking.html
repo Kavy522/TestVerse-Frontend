@@ -4,17 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Exam | TestVerse</title>
-
     <link rel="icon" href="../../assets/icons/exam.svg" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../../css/pages/student/exam-taking.css">
-
-    <!-- Monaco Editor (CDN) -->
+    <!-- Monaco Editor AMD loader — loaded ONCE here -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
 </head>
 <body>
 
-<!-- ══ CRITICAL ERROR OVERLAY (shown if exam can't load) ═══════════ -->
+<!-- ══ CRITICAL ERROR OVERLAY ══════════════════════════════════════ -->
 <div id="fatalOverlay" class="fatal-overlay hidden">
     <div class="fatal-box">
         <i class="fas fa-exclamation-triangle"></i>
@@ -110,7 +108,7 @@
         <div class="et-center">
             <div class="exam-timer-wrap" id="timerWrap">
                 <i class="fas fa-clock"></i>
-                <span class="exam-timer" id="timerDisplay">--:--:--</span>
+                <span class="exam-timer" id="timerDisplay">--:--</span>
                 <span class="timer-label">remaining</span>
             </div>
         </div>
@@ -125,13 +123,11 @@
         </div>
     </header>
 
-    <!-- ══ BODY (sidebar + question area) ══════════════════════════ -->
+    <!-- ══ BODY ═════════════════════════════════════════════════════ -->
     <div class="exam-body">
 
         <!-- ── QUESTION NAVIGATOR SIDEBAR ─────────────────────────── -->
         <aside class="qnav-sidebar" id="qnavSidebar">
-
-            <!-- Progress Bar -->
             <div class="qnav-progress">
                 <div class="qnav-prog-labels">
                     <span id="progAnswered">0 answered</span>
@@ -141,41 +137,24 @@
                     <div class="qnav-prog-fill" id="progFill" style="width:0%"></div>
                 </div>
             </div>
-
-            <!-- Legend -->
             <div class="qnav-legend">
-                <span class="qnav-legend-item">
-                    <span class="qn-bubble qn-answered"></span> Answered
-                </span>
-                <span class="qnav-legend-item">
-                    <span class="qn-bubble qn-current"></span> Current
-                </span>
-                <span class="qnav-legend-item">
-                    <span class="qn-bubble qn-flagged"></span> Flagged
-                </span>
-                <span class="qnav-legend-item">
-                    <span class="qn-bubble qn-unanswered"></span> Not visited
-                </span>
+                <span class="qnav-legend-item"><span class="qn-bubble qn-answered"></span> Answered</span>
+                <span class="qnav-legend-item"><span class="qn-bubble qn-current"></span> Current</span>
+                <span class="qnav-legend-item"><span class="qn-bubble qn-flagged"></span> Flagged</span>
+                <span class="qnav-legend-item"><span class="qn-bubble qn-unanswered"></span> Not visited</span>
             </div>
-
-            <!-- Question Bubbles Grid -->
             <div class="qnav-grid" id="qnavGrid"></div>
-
-            <!-- Section Filter -->
             <div class="qnav-sections" id="qnavSections"></div>
-
         </aside>
 
-        <!-- ── QUESTION AREA ───────────────────────────────────────── -->
+        <!-- ── QUESTION AREA ──────────────────────────────────────── -->
         <main class="question-area" id="questionArea">
 
-            <!-- Loading state -->
             <div class="qa-loading" id="qaLoading">
                 <div class="et-spinner"></div>
                 <p>Loading questions…</p>
             </div>
 
-            <!-- Question Card -->
             <div class="question-card hidden" id="questionCard">
 
                 <!-- Q Header -->
@@ -202,7 +181,7 @@
                     </div>
                 </div>
 
-                <!-- ── ANSWER AREA (dynamically swapped) ─────────── -->
+                <!-- ══ ANSWER AREAS — all start hidden, JS shows one ══ -->
 
                 <!-- MCQ -->
                 <div class="answer-area" id="answerMcq" style="display:none;">
@@ -229,7 +208,9 @@
                         placeholder="Type your answer here…"
                         rows="6"
                     ></textarea>
-                    <span class="text-char-count" id="charCount">0 / ∞</span>
+                    <div class="text-answer-footer">
+                        <span class="text-char-count" id="charCount">0 chars</span>
+                    </div>
                 </div>
 
                 <!-- Coding -->
@@ -246,12 +227,12 @@
                     </div>
                     <div id="monacoEditor" class="monaco-editor-wrap"></div>
                     <div class="code-footer">
-                        <span class="code-hint"><i class="fas fa-info-circle"></i> Ctrl+S to save • Ctrl+Enter to run (if enabled)</span>
+                        <span class="code-hint"><i class="fas fa-info-circle"></i> Ctrl+S to save</span>
                         <span class="code-saved" id="codeSavedIndicator"></span>
                     </div>
                 </div>
 
-                <!-- Q Footer: nav -->
+                <!-- Q Footer -->
                 <div class="qc-footer">
                     <div class="qc-footer-left">
                         <button class="btn btn-outline btn-sm" id="clearAnswerBtn">
@@ -267,9 +248,9 @@
                         </button>
                     </div>
                 </div>
-            </div><!-- /question-card -->
 
-        </main><!-- /question-area -->
+            </div><!-- /question-card -->
+        </main>
     </div><!-- /exam-body -->
 </div><!-- /exam-shell -->
 

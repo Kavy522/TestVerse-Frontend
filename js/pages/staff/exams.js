@@ -6,6 +6,14 @@
  */
 'use strict';
 
+// ── Canonical exam types — must match examcreate.html exactly ──────
+const EXAM_TYPES = [
+    { value: 'mcq',         label: 'MCQ Only'    },
+    { value: 'mixed',       label: 'Mixed'       },
+    { value: 'descriptive', label: 'Descriptive' },
+    { value: 'coding',      label: 'Coding'      },
+];
+
 // ── State ──────────────────────────────────────────────────────────
 let _page = 1, _totalPages = 1, _totalCount = 0, _allExams = [];
 let _search = '', _statusFilter = '', _typeFilter = '', _sort = '-created_at';
@@ -25,8 +33,13 @@ function _initUser() {
     const user = Auth.getUser(); if (!user) return;
     const name = user.name || user.username || user.email?.split('@')[0] || 'Staff';
     const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`;
-    ['sidebarUserName','topbarUserName'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = name; });
-    ['sidebarAvatar','topbarAvatar'].forEach(id => { const el = document.getElementById(id); if (el) el.src = avatar; });
+    // FIX: targets both old IDs (sidebarUserName/topbarUserName) and HTML IDs (sidebarName/topbarName)
+    ['sidebarUserName', 'topbarUserName', 'sidebarName', 'topbarName'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = name;
+    });
+    ['sidebarAvatar', 'topbarAvatar'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.src = avatar;
+    });
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────
@@ -45,8 +58,9 @@ function _initSidebar() {
 }
 
 // ── Stat Pills ─────────────────────────────────────────────────────
+// FIX: was '.tv-stat-pill' — HTML uses '.stat-pill'
 function _initStatPills() {
-    document.querySelectorAll('.tv-stat-pill').forEach(pill => {
+    document.querySelectorAll('.stat-pill').forEach(pill => {
         pill.addEventListener('click', () => {
             const f = pill.dataset.filter;
             _statusFilter = (_statusFilter === f && f !== '') ? '' : f;
@@ -55,7 +69,7 @@ function _initStatPills() {
     });
 }
 function _syncPillUI() {
-    document.querySelectorAll('.tv-stat-pill').forEach(p =>
+    document.querySelectorAll('.stat-pill').forEach(p =>
         p.classList.toggle('active-filter', p.dataset.filter === _statusFilter));
     const clearBtn = document.getElementById('clearFiltersBtn');
     if (clearBtn) clearBtn.style.display = (_search || _statusFilter || _typeFilter) ? 'flex' : 'none';
@@ -157,6 +171,13 @@ function _getStatus(exam, now = new Date()) {
 }
 const _statusLabel = { draft: 'Draft', published: 'Published', active: 'Live', completed: 'Completed' };
 
+// ── Type label helper ──────────────────────────────────────────────
+// FIX: looks up EXAM_TYPES for correct label instead of raw capitalise
+function _typeLabel(type) {
+    const found = EXAM_TYPES.find(t => t.value === (type || '').toLowerCase());
+    return found ? found.label : (type ? type.charAt(0).toUpperCase() + type.slice(1) : 'General');
+}
+
 // ── Render ─────────────────────────────────────────────────────────
 function _renderExams(exams) {
     const grid = document.getElementById('examsGrid'); if (!grid) return;
@@ -178,7 +199,6 @@ function _buildCard(exam) {
     const fmt = iso => iso ? new Date(iso).toLocaleString('en-IN', {
         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     }) : 'Not set';
-    const typeLabel = (exam.exam_type || 'general').charAt(0).toUpperCase() + (exam.exam_type || 'general').slice(1);
 
     const pubBtn = exam.is_published
         ? `<button class="action-btn unpublish" onclick="window._openPublish('${exam.id}','unpublish','${_esc(exam.title)}')"><i class="fas fa-eye-slash"></i> Unpublish</button>`
@@ -201,7 +221,7 @@ function _buildCard(exam) {
             <span class="status-badge s-${status}"><span class="status-dot"></span>${label}</span>
         </div>
         <div class="card-body">
-            <span class="type-chip">${typeLabel}</span>
+            <span class="type-chip">${_typeLabel(exam.exam_type)}</span>
             ${exam.description ? `<p class="exam-desc">${_esc(exam.description)}</p>` : ''}
             ${cdHtml}
             <div class="card-meta">
@@ -225,7 +245,6 @@ function _buildCard(exam) {
         </div>
     </div>`;
 }
-
 
 // ── Countdowns ─────────────────────────────────────────────────────
 function _startCountdownEnd(exam) {
@@ -289,14 +308,19 @@ function _initEditModal() {
     ['editStart','editEnd'].forEach(id => document.getElementById(id)?.addEventListener('change', _calcDuration));
     document.getElementById('editSaveBtn')?.addEventListener('click', _saveEdit);
 }
-function _closeEdit() { document.getElementById('editModal').classList.remove('show'); _editId = null; UI.clearAlert('editAlertContainer'); }
+function _closeEdit() {
+    document.getElementById('editModal').classList.remove('show');
+    _editId = null;
+    UI.clearAlert('editAlertContainer');
+}
 
 window._openEdit = (id) => {
     const exam = _allExams.find(e => e.id === id); if (!exam) return;
     _editId = id;
     document.getElementById('editTitle').value        = exam.title || '';
     document.getElementById('editDescription').value  = exam.description || '';
-    document.getElementById('editType').value         = exam.exam_type || 'midterm';
+    // FIX: default fallback is 'mixed' not 'midterm'
+    document.getElementById('editType').value         = exam.exam_type || 'mixed';
     document.getElementById('editTotalMarks').value   = exam.total_marks || '';
     document.getElementById('editPassMarks').value    = exam.passing_marks || '';
     document.getElementById('editInstructions').value = exam.instructions || '';
@@ -318,13 +342,13 @@ function _calcDuration() {
 }
 async function _saveEdit() {
     if (!_editId) return;
-    const title = document.getElementById('editTitle').value.trim();
-    const description = document.getElementById('editDescription').value.trim();
-    const exam_type = document.getElementById('editType').value;
-    const start_time = document.getElementById('editStart').value;
-    const end_time   = document.getElementById('editEnd').value;
-    const total_marks = document.getElementById('editTotalMarks').value;
-    const pass_marks  = document.getElementById('editPassMarks').value;
+    const title        = document.getElementById('editTitle').value.trim();
+    const description  = document.getElementById('editDescription').value.trim();
+    const exam_type    = document.getElementById('editType').value;
+    const start_time   = document.getElementById('editStart').value;
+    const end_time     = document.getElementById('editEnd').value;
+    const total_marks  = document.getElementById('editTotalMarks').value;
+    const pass_marks   = document.getElementById('editPassMarks').value;
     const instructions = document.getElementById('editInstructions').value.trim();
 
     if (!title || !description || !start_time || !end_time || !total_marks || !pass_marks)
@@ -360,7 +384,10 @@ function _initPublishModal() {
     document.getElementById('publishModal')?.addEventListener('click', e => { if (e.target.id === 'publishModal') _closePublish(); });
     document.getElementById('publishConfirmBtn')?.addEventListener('click', _confirmPublish);
 }
-function _closePublish() { document.getElementById('publishModal').classList.remove('show'); _publishId = null; }
+function _closePublish() {
+    document.getElementById('publishModal').classList.remove('show');
+    _publishId = null;
+}
 
 window._openPublish = (id, action, title) => {
     _publishId = id; _publishAct = action;
@@ -373,8 +400,14 @@ window._openPublish = (id, action, title) => {
         : `"${title}" will be hidden from students. You can republish anytime.`;
     const ct = document.getElementById('publishConfirmText');
     if (ct) ct.textContent = isP ? 'Yes, Publish' : 'Yes, Unpublish';
+
+    // FIX: use classList.remove/add instead of btn.className= which wipes btn-text/btn-loader spans
     const btn = document.getElementById('publishConfirmBtn');
-    btn.className = isP ? 'tv-btn tv-btn-success' : 'tv-btn tv-btn-warning';
+    if (btn) {
+        btn.classList.remove('btn-primary', 'btn-warning', 'btn-success');
+        btn.classList.add(isP ? 'btn-primary' : 'btn-warning');
+    }
+
     document.getElementById('publishModal').classList.add('show');
 };
 
@@ -402,7 +435,10 @@ function _initDeleteModal() {
     document.getElementById('deleteModal')?.addEventListener('click', e => { if (e.target.id === 'deleteModal') _closeDelete(); });
     document.getElementById('deleteConfirmBtn')?.addEventListener('click', _confirmDelete);
 }
-function _closeDelete() { document.getElementById('deleteModal').classList.remove('show'); _deleteId = null; }
+function _closeDelete() {
+    document.getElementById('deleteModal').classList.remove('show');
+    _deleteId = null;
+}
 
 window._openDelete = (id, title) => {
     _deleteId = id;

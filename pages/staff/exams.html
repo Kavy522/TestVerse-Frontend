@@ -101,13 +101,13 @@
                     <button class="search-clear hidden" id="searchClear"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="filter-selects">
+                    <!-- FIX: synced with examcreate.html (mcq/mixed/descriptive/coding) -->
                     <select id="typeFilter" class="filter-select">
                         <option value="">All Types</option>
-                        <option value="midterm">Midterm</option>
-                        <option value="final">Final</option>
-                        <option value="quiz">Quiz</option>
-                        <option value="assignment">Assignment</option>
-                        <option value="practice">Practice</option>
+                        <option value="mcq">MCQ Only</option>
+                        <option value="mixed">Mixed</option>
+                        <option value="descriptive">Descriptive</option>
+                        <option value="coding">Coding</option>
                     </select>
                     <select id="sortFilter" class="filter-select">
                         <option value="-created_at">Newest First</option>
@@ -166,12 +166,12 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Exam Type <span class="form-required">*</span></label>
+                        <!-- FIX: synced with examcreate.html (mcq/mixed/descriptive/coding) -->
                         <select id="editType" class="form-input" required>
-                            <option value="midterm">Midterm</option>
-                            <option value="final">Final</option>
-                            <option value="quiz">Quiz</option>
-                            <option value="assignment">Assignment</option>
-                            <option value="practice">Practice</option>
+                            <option value="mcq">MCQ Only</option>
+                            <option value="mixed">Mixed</option>
+                            <option value="descriptive">Descriptive</option>
+                            <option value="coding">Coding</option>
                         </select>
                     </div>
                 </div>
@@ -256,6 +256,7 @@
         <div class="modal-body"><p id="publishModalMsg"></p></div>
         <div class="modal-footer">
             <button class="btn btn-outline" id="publishCancelBtn">Cancel</button>
+            <!-- FIX: btn-text + btn-loader spans preserved; JS uses classList not className= -->
             <button class="btn btn-primary" id="publishConfirmBtn">
                 <span class="btn-text" id="publishConfirmText">Confirm</span>
                 <span class="btn-loader hidden"><i class="fas fa-spinner fa-spin"></i></span>

@@ -503,3 +503,54 @@
 .toggle-label-group { display:flex; flex-direction:column; gap:.1rem; }
 .toggle-label-main  { font-size:.9rem; font-weight:600; color:#1e293b; }
 .toggle-label-sub   { font-size:.775rem; color:#94a3b8; }
+
+/* ── Department Select Dropdown (drawer) ──────────────────────── */
+.dept-select-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.dept-select-icon {
+    position: absolute;
+    left: 1rem;
+    color: #94a3b8;
+    font-size: 0.8125rem;
+    pointer-events: none;
+    z-index: 1;
+}
+.drawer-select {
+    width: 100%;
+    padding: 0.65rem 2.5rem 0.65rem 2.5rem; /* left pad for icon, right pad for arrow */
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    color: #1e293b;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.drawer-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.drawer-select option {
+    background: #ffffff;
+    color: #1e293b;
+    padding: 0.5rem;
+}
+.drawer-select option:disabled {
+    color: #94a3b8;
+}
+/* Highlight current value */
+.drawer-select:not([value=""]) {
+    color: #1e293b;
+    font-weight: 500;
+}

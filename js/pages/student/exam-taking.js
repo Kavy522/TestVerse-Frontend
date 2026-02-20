@@ -1,26 +1,15 @@
 /**
  * TestVerse — Exam Taking Page
- *
- * Features:
- *  • Loads exam + questions from API
- *  • Countdown timer with warn/danger states
- *  • Auto-save every 30s (server) + immediate localStorage backup
- *  • Auto-submit when timer hits 0
- *  • Offline detection: queues to localStorage, syncs on reconnect
- *  • MCQ (single/multi), True/False, Short Answer, Descriptive, Coding
- *  • Monaco Editor for coding questions (language selector + fullscreen)
- *  • Flag for review
- *  • Question navigator with bubble states
- *  • Progress bar
- *  • Confirm-before-submit modal with answered/unanswered/flagged counts
- *
- * URL params: ?exam_id=<id>&attempt_id=<id>
- *
- * Endpoints used:
- *   EXAM_DETAIL(id)   GET
- *   EXAM_ATTEMPT(id)  POST  → { attempt_id, questions, time_remaining_seconds, ... }
- *   EXAM_SAVE(id)     POST  → { answers: [...] }
- *   EXAM_SUBMIT(id)   POST  → { answers: [...] }
+ * FIX: normalise q.type → q.question_type on load so all rendering
+ *      branches work regardless of which field the backend returns.
+ *      Also map examedit type values → exam-taking type values:
+ *        mcq           → mcq
+ *        multiple_mcq  → multiple_choice
+ *        descriptive   → descriptive
+ *        coding        → coding
+ *        true_false    → true_false
+ *        short_answer  → short_answer
+ *        long_answer   → long_answer
  */
 
 'use strict';
@@ -28,31 +17,54 @@
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG / CONSTANTS
 // ══════════════════════════════════════════════════════════════════
-const AUTOSAVE_INTERVAL_MS = 30_000;  // 30s server save
+const AUTOSAVE_INTERVAL_MS = 30_000;
 const LS_KEY = (examId) => `tv_exam_draft_${examId}`;
+
+// FIX: canonical type map — examedit.js values → exam-taking render values
+const TYPE_NORMALISE = {
+    mcq:           'mcq',
+    single_choice: 'mcq',
+    multiple_mcq:  'multiple_choice',
+    multiple_choice: 'multiple_choice',
+    true_false:    'true_false',
+    short_answer:  'short_answer',
+    long_answer:   'long_answer',
+    descriptive:   'descriptive',
+    coding:        'coding',
+};
+
+// FIX: display labels for type badge
+const TYPE_LABELS = {
+    mcq:             'MCQ',
+    multiple_choice: 'Multi-Select',
+    true_false:      'True / False',
+    short_answer:    'Short Answer',
+    long_answer:     'Long Answer',
+    descriptive:     'Descriptive',
+    coding:          'Coding',
+};
 
 // ══════════════════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════════════════
 let _examId       = null;
 let _attemptId    = null;
-let _exam         = null;           // exam detail object
-let _questions    = [];             // flat array of question objects
-let _answers      = {};             // { questionId: answer_value }
-let _flagged      = new Set();      // questionId strings
-let _currentIdx   = 0;             // current question index (0-based)
-let _timeLeft     = 0;              // seconds
+let _exam         = null;
+let _questions    = [];
+let _answers      = {};
+let _flagged      = new Set();
+let _currentIdx   = 0;
+let _timeLeft     = 0;
 let _timerInterval    = null;
 let _autosaveInterval = null;
 let _isSubmitting     = false;
 let _isOffline        = false;
-let _monacoInstances  = {};         // { questionId: monaco_editor_instance }
+let _monacoInstances  = {};
 let _monacoFsInstance = null;
-let _warnToasts       = new Set();  // which minute-marks shown
+let _warnToasts       = new Set();
 let _sections         = [];
 let _activeSection    = null;
 
-// ── Warn at these thresholds (seconds) ────────────────────────────
 const WARN_THRESHOLDS = [
     { sec: 300, msg: '5 minutes remaining!', cls: '' },
     { sec: 60,  msg: '1 minute remaining!',  cls: 'urgent' },
@@ -85,8 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ══════════════════════════════════════════════════════════════════
 async function _loadExam() {
     try {
-        // 1. Load exam detail
-        const examRes          = await Api.get(CONFIG.ENDPOINTS.EXAM_DETAIL(_examId));
+        const examRes = await Api.get(CONFIG.ENDPOINTS.EXAM_DETAIL(_examId));
         const { data: examData, error: examErr } = await Api.parse(examRes);
         if (examErr || !examData) {
             _fatalError('Exam Not Found', 'This exam could not be loaded. It may have ended or does not exist.');
@@ -94,7 +105,6 @@ async function _loadExam() {
         }
         _exam = examData;
 
-        // 2. Start attempt (or resume)
         const attemptRes = await Api.post(CONFIG.ENDPOINTS.EXAM_ATTEMPT(_examId), {
             attempt_id: _attemptId || undefined,
         });
@@ -119,22 +129,39 @@ async function _loadExam() {
             return;
         }
 
-        // Normalise question IDs to strings
-        _questions = _questions.map(q => ({ ...q, id: String(q.id) }));
+        // ── FIX: normalise every question ──────────────────────────
+        _questions = _questions.map(q => {
+            const rawType = (q.type || q.question_type || 'mcq').toLowerCase();
+            const normType = TYPE_NORMALISE[rawType] || rawType;
+            return {
+                ...q,
+                id:            String(q.id),
+                // always expose as question_type for the rest of the page
+                question_type: normType,
+                // preserve raw for debugging
+                _raw_type:     rawType,
+                // FIX: backend uses "points" not "marks"
+                marks:         q.points ?? q.marks ?? 0,
+                // normalise option text field
+                options: (q.options || []).map(opt =>
+                    typeof opt === 'string'
+                        ? { text: opt, value: opt, id: opt }
+                        : { ...opt, text: opt.text || opt.label || opt.value || '' }
+                ),
+            };
+        });
+        // ──────────────────────────────────────────────────────────
 
-        // 3. Restore saved answers (server answers first, then localStorage delta)
         _answers = {};
         (attemptData.saved_answers || attemptData.answers || []).forEach(a => {
             _answers[String(a.question_id || a.question)] = a.answer ?? a.response ?? a.selected_option;
         });
-        _restoreFromLocal();   // overlay any unsaved local changes
+        _restoreFromLocal();
 
-        // 4. Build sections list
         const secSet = new Set();
         _questions.forEach(q => { if (q.section) secSet.add(q.section); });
         _sections = [...secSet];
 
-        // 5. Render shell
         _setText('examTitle', _exam.title || 'Exam');
         _setText('examType',  _exam.exam_type ? _exam.exam_type.toUpperCase() : '');
         document.title = `${_exam.title || 'Exam'} | TestVerse`;
@@ -215,20 +242,15 @@ function _renderQuestion(idx) {
     const card = document.getElementById('questionCard');
     card.classList.remove('hidden');
 
-    // Header
-    _setText('qcNum',    `Q${_currentIdx + 1}`);
+    _setText('qcNum',     `Q${_currentIdx + 1}`);
     _setText('qcSection', q.section || '');
+    // FIX: backend field is "points" — already normalised to q.marks in _loadExam
     _setText('qcMarks',   q.marks != null ? `${q.marks} mark${q.marks !== 1 ? 's' : ''}` : '');
 
-    // Type badge
-    const typeMap = {
-        mcq: 'MCQ', single_choice:'MCQ', multiple_choice:'Multi-Select',
-        true_false:'True / False', short_answer:'Short Answer',
-        descriptive:'Descriptive', coding:'Coding',
-    };
-    _setText('qcTypeBadge', typeMap[q.question_type] || q.question_type || 'Question');
+    // FIX: use q.question_type (already normalised)
+    const qType = (q.question_type || 'mcq').toLowerCase();
+    _setText('qcTypeBadge', TYPE_LABELS[qType] || qType || 'Question');
 
-    // Flag button
     const fb = document.getElementById('flagBtn');
     if (_flagged.has(q.id)) {
         fb.classList.add('flagged');
@@ -238,11 +260,9 @@ function _renderQuestion(idx) {
         _setText('flagBtnText', 'Flag');
     }
 
-    // Question text (supports basic HTML & code blocks)
     const qText = document.getElementById('qText');
     qText.innerHTML = _formatQText(q.text || q.question_text || q.body || '');
 
-    // Image
     const imgWrap = document.getElementById('qImageWrap');
     if (q.image || q.image_url) {
         document.getElementById('qImage').src = q.image || q.image_url;
@@ -251,26 +271,23 @@ function _renderQuestion(idx) {
         imgWrap.classList.add('hidden');
     }
 
-    // Hide all answer areas
     ['answerMcq','answerTf','answerText','answerCode'].forEach(id =>
         document.getElementById(id).style.display = 'none'
     );
 
-    const qType = (q.question_type || '').toLowerCase();
-
-    if (qType === 'mcq' || qType === 'single_choice' || qType === 'multiple_choice') {
+    // FIX: use normalised qType — all branches now correctly reached
+    if (qType === 'mcq' || qType === 'multiple_choice') {
         _renderMcq(q);
     } else if (qType === 'true_false') {
         _renderTrueFalse(q);
     } else if (qType === 'coding') {
         _renderCoding(q);
     } else {
+        // descriptive | short_answer | long_answer
         _renderTextAnswer(q);
     }
 
-    // Nav buttons
     document.getElementById('prevQBtn').disabled = _currentIdx === 0;
-    document.getElementById('nextQBtn').textContent = '';
     const nextBtn = document.getElementById('nextQBtn');
     if (_currentIdx === _questions.length - 1) {
         nextBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Review & Submit';
@@ -282,7 +299,6 @@ function _renderQuestion(idx) {
         nextBtn.classList.add('btn-primary');
     }
 
-    // Update nav grid
     _updateQNavGrid();
     _scrollNavToQuestion(_currentIdx);
 }
@@ -293,7 +309,7 @@ function _renderMcq(q) {
     const cont = document.getElementById('mcqOptions');
     wrap.style.display = 'block';
 
-    const isMulti = (q.question_type || '') === 'multiple_choice';
+    const isMulti = q.question_type === 'multiple_choice';
     const saved   = _answers[q.id];
     const selArr  = isMulti
         ? (Array.isArray(saved) ? saved : (saved ? [saved] : []))
@@ -313,9 +329,10 @@ function _renderMcq(q) {
 
     opts.forEach((opt, i) => {
         const key  = keys[i] || String(i + 1);
-        const val  = typeof opt === 'object' ? (opt.id || opt.value || String(i)) : String(opt);
-        const text = typeof opt === 'object' ? (opt.text || opt.label || opt.value || opt) : String(opt);
-        const sel  = selArr.includes(String(val));
+        // FIX: options already normalised in _loadExam, use opt.id ?? opt.value ?? i
+        const val  = typeof opt === 'object' ? String(opt.id ?? opt.value ?? i) : String(opt);
+        const text = typeof opt === 'object' ? (opt.text || opt.label || opt.value || '') : String(opt);
+        const sel  = selArr.includes(val);
 
         const div  = document.createElement('div');
         div.className = `mcq-option${sel ? ' selected' : ''}`;
@@ -338,7 +355,6 @@ function _selectMcqOption(q, div, val, isMulti) {
         const idx    = selArr.indexOf(val);
         if (idx === -1) selArr.push(val); else selArr.splice(idx, 1);
         _answers[q.id] = selArr.length ? selArr : undefined;
-        // Re-render selection state
         cont.querySelectorAll('.mcq-option').forEach(el => {
             const isNowSel = selArr.includes(el.dataset.val);
             el.classList.toggle('selected', isNowSel);
@@ -375,16 +391,21 @@ function _renderTrueFalse(q) {
     });
 }
 
-// ── Short / Descriptive ────────────────────────────────────────────
+// ── Short / Descriptive / Long ─────────────────────────────────────
 function _renderTextAnswer(q) {
     const wrap  = document.getElementById('answerText');
     const ta    = document.getElementById('textAnswer');
     wrap.style.display = 'block';
     const maxLen = q.max_length || q.word_limit || null;
     ta.maxLength  = maxLen || 999999;
-    ta.placeholder = q.question_type === 'descriptive'
-        ? 'Write your detailed answer here…'
-        : 'Type your short answer here…';
+
+    const qType = q.question_type || '';
+    if (qType === 'descriptive' || qType === 'long_answer') {
+        ta.placeholder = 'Write your detailed answer here…';
+    } else {
+        ta.placeholder = 'Type your short answer here…';
+    }
+
     ta.value = _answers[q.id] || '';
     _updateCharCount(ta.value, maxLen);
 
@@ -404,7 +425,6 @@ function _renderCoding(q) {
     const wrap = document.getElementById('answerCode');
     wrap.style.display = 'block';
 
-    // Language selector
     const langSel = document.getElementById('codeLangSelect');
     const langs   = q.allowed_languages || q.languages || ['python','javascript','java','cpp','c'];
     langSel.innerHTML = langs.map(l => `<option value="${l}">${_langLabel(l)}</option>`).join('');
@@ -414,22 +434,18 @@ function _renderCoding(q) {
     const savedCode = savedAns.code || q.starter_code || q.boilerplate || '';
     langSel.value = savedLang;
 
-    // Destroy old monaco instance for this question if any
     if (_monacoInstances[q.id]) {
         try { _monacoInstances[q.id].dispose(); } catch {}
         delete _monacoInstances[q.id];
     }
 
-    // Reset code btn
     document.getElementById('resetCodeBtn').onclick = () => {
         const editor = _monacoInstances[q.id];
         if (editor) editor.setValue(q.starter_code || q.boilerplate || '');
     };
 
-    // Fullscreen btn
     document.getElementById('fullscreenCodeBtn').onclick = () => _openFsEditor(q);
 
-    // Init Monaco
     _initMonaco('monacoEditor', q.id, savedCode, savedLang, (newCode) => {
         const cur = _answers[q.id] || {};
         _answers[q.id] = { ...cur, code: newCode, language: langSel.value };
@@ -483,7 +499,6 @@ function _initMonaco(containerId, qId, code, lang, onChange) {
             fixedOverflowWidgets: true,
         });
 
-        // Ctrl+S to trigger save
         editor.addCommand(
             window.monaco.KeyMod.CtrlCmd | window.monaco.KeyCode.KeyS,
             () => { _saveToServer(); }
@@ -508,7 +523,6 @@ function _openFsEditor(q) {
     const savedLang = savedAns.language || langs[0];
     const savedCode = savedAns.code || q.starter_code || '';
 
-    // Sync FS lang selector
     const fsLang = document.getElementById('fsLangSelect');
     fsLang.innerHTML = langs.map(l => `<option value="${l}">${_langLabel(l)}</option>`).join('');
     fsLang.value = savedLang;
@@ -546,7 +560,6 @@ function _openFsEditor(q) {
             const lang = fsLang.value;
             const model = _monacoFsInstance?.getModel();
             if (model) window.monaco.editor.setModelLanguage(model, _monacoLang(lang));
-            // Also sync to main editor
             const mainEditor = _monacoInstances[q.id];
             if (mainEditor) {
                 const mainModel = mainEditor.getModel();
@@ -573,7 +586,6 @@ function _syncFsToMain(q) {
     const lang  = document.getElementById('fsLangSelect').value;
     _answers[q.id] = { code, language: lang };
     _saveLocal(); _updateProgress(); _updateQNavGrid();
-    // Update in-card editor
     const mainEd = _monacoInstances[q.id];
     if (mainEd && mainEd.getValue() !== code) {
         const pos = mainEd.getPosition();
@@ -609,10 +621,10 @@ function _updateQNavGrid() {
         const flagged   = _flagged.has(q.id);
         const current   = i === _currentIdx;
         btn.className   = 'qn-btn';
-        if (current)              btn.classList.add('qn-current');
+        if (current)                  btn.classList.add('qn-current');
         else if (flagged && answered) btn.classList.add('qn-flagged', 'qn-answered');
-        else if (flagged)         btn.classList.add('qn-flagged');
-        else if (answered)        btn.classList.add('qn-answered');
+        else if (flagged)             btn.classList.add('qn-flagged');
+        else if (answered)            btn.classList.add('qn-answered');
     });
 }
 
@@ -662,10 +674,9 @@ function _updateProgress() {
     _setText('progTotal',    `${total} total`);
     document.getElementById('progFill').style.width = `${pct}%`;
 
-    // Update confirm modal counts too
-    _setText('cntAnswered',  answered);
+    _setText('cntAnswered',   answered);
     _setText('cntUnanswered', total - answered);
-    _setText('cntFlagged',   _flagged.size);
+    _setText('cntFlagged',    _flagged.size);
 }
 
 function _isAnswered(q) {
@@ -698,7 +709,6 @@ function _restoreFromLocal() {
         if (!raw) return;
         const obj = JSON.parse(raw);
         if (!obj || typeof obj !== 'object') return;
-        // Merge: local answers override server (more recent)
         if (obj.answers) Object.assign(_answers, obj.answers);
         if (Array.isArray(obj.flagged)) _flagged = new Set(obj.flagged);
     } catch (e) {
@@ -715,13 +725,11 @@ async function _saveToServer(silent = true) {
         const { error } = await Api.parse(res);
         if (error) {
             _setSaveStatus('failed', 'Save failed');
-            if (_isOffline) _saveLocal(); // ensure local backup
+            if (_isOffline) _saveLocal();
         } else {
             _setSaveStatus('saved', 'Saved');
             if (!silent) _showSaveToast('Answers saved!');
-            // Clear local draft once server confirms
             try { localStorage.removeItem(LS_KEY(_examId)); } catch {}
-            // Write fresh local copy
             _saveLocal();
         }
     } catch {
@@ -738,7 +746,6 @@ function _startAutosave() {
 
 function _setSaveStatus(state, text) {
     const wrap = document.getElementById('saveStatus');
-    const txt  = document.getElementById('saveStatusText');
     if (!wrap) return;
     wrap.className = `et-save-status ${state}`;
     _setText('saveStatusText', text);
@@ -783,7 +790,6 @@ async function _doSubmit() {
             return;
         }
 
-        // Clear local draft
         try { localStorage.removeItem(LS_KEY(_examId)); } catch {}
 
         _setText('submitMsg', 'Submitted! Redirecting to results…');
@@ -795,14 +801,12 @@ async function _doSubmit() {
         console.error('[exam-taking] submit error:', err);
         _isSubmitting = false;
         overlay.classList.add('hidden');
-        // Last-resort: save locally and try again
         _saveLocal();
         alert('Network error during submission. Your answers are saved locally. Please try submitting again.');
     }
 }
 
 function _autoSubmit() {
-    // Timer expired: save current answer and force submit
     _captureCurrentEditorState();
     _saveLocal();
     _doSubmit();
@@ -825,7 +829,6 @@ function _buildSubmitPayload(isFinal = false) {
     };
 }
 
-/** Snapshot the currently displayed monaco/textarea value before submit */
 function _captureCurrentEditorState() {
     const q = _questions[_currentIdx];
     if (!q) return;
@@ -854,7 +857,6 @@ function _initOfflineDetection() {
     window.addEventListener('online', () => {
         _isOffline = false;
         banner.classList.add('hidden');
-        // Sync any unsaved local answers to server
         _saveToServer(true);
     });
     window.addEventListener('offline', () => {
@@ -874,10 +876,8 @@ function _initOfflineDetection() {
 // ══════════════════════════════════════════════════════════════════
 function _initKeyboardShortcuts() {
     document.addEventListener('keydown', e => {
-        // Don't intercept when typing in textarea or monaco
         const tag = document.activeElement?.tagName;
         if (tag === 'TEXTAREA' || tag === 'INPUT') return;
-        // Monaco editors intercept their own events; skip if monaco has focus
         if (document.activeElement?.closest?.('.monaco-editor')) return;
 
         if (e.key === 'ArrowRight' || e.key === 'd') {
@@ -897,12 +897,12 @@ function _initKeyboardShortcuts() {
             _captureCurrentEditorState();
             _saveToServer(false);
         }
-        // Number keys 1-9 for MCQ option selection
+        // Number keys for MCQ
         if (/^[1-9]$/.test(e.key)) {
             const q = _questions[_currentIdx];
             if (!q) return;
             const qType = (q.question_type || '').toLowerCase();
-            if (qType === 'mcq' || qType === 'single_choice') {
+            if (qType === 'mcq') {
                 const idx = parseInt(e.key) - 1;
                 const opts = document.querySelectorAll('#mcqOptions .mcq-option');
                 if (opts[idx]) opts[idx].click();
@@ -915,10 +915,8 @@ function _initKeyboardShortcuts() {
 //  MISC CONTROLS WIRING
 // ══════════════════════════════════════════════════════════════════
 function _wireMiscControls() {
-    // Flag button
     document.getElementById('flagBtn').addEventListener('click', _toggleFlag);
 
-    // Prev / Next
     document.getElementById('prevQBtn').addEventListener('click', () => {
         if (_currentIdx > 0) { _captureCurrentEditorState(); _renderQuestion(_currentIdx - 1); }
     });
@@ -931,7 +929,6 @@ function _wireMiscControls() {
         }
     });
 
-    // Clear answer
     document.getElementById('clearAnswerBtn').addEventListener('click', () => {
         const q = _questions[_currentIdx];
         if (!q) return;
@@ -940,13 +937,11 @@ function _wireMiscControls() {
         _saveLocal(); _updateProgress(); _updateQNavGrid();
     });
 
-    // Topbar submit
     document.getElementById('topbarSubmitBtn').addEventListener('click', () => {
         _captureCurrentEditorState();
         _openConfirmModal();
     });
 
-    // Confirm modal
     document.getElementById('confirmSubmitBtn').addEventListener('click', _doSubmit);
     document.getElementById('confirmCancelBtn').addEventListener('click', () =>
         document.getElementById('confirmModal').classList.remove('open')
@@ -958,12 +953,10 @@ function _wireMiscControls() {
         if (e.target.id === 'confirmModal') document.getElementById('confirmModal').classList.remove('open');
     });
 
-    // Time toast close
     document.getElementById('timeToastClose').addEventListener('click', () =>
         document.getElementById('timeToast').classList.add('hidden')
     );
 
-    // Warn before leaving page
     window.addEventListener('beforeunload', e => {
         if (_isSubmitting) return;
         _captureCurrentEditorState();
@@ -1009,17 +1002,12 @@ function _langLabel(lang) {
 }
 
 function _formatQText(text) {
-    // Basic safety: allow code blocks but escape the rest
     return text
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-        // restore code blocks (```...```)
         .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
             `<pre><code>${code.trim()}</code></pre>`)
-        // inline code (`...`)
         .replace(/`([^`]+)`/g, '<code>$1</code>')
-        // bold (**...**)
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        // line breaks
         .replace(/\n/g, '<br>');
 }
 
